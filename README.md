@@ -1,12 +1,12 @@
 # GPUscout
 
-A tool for discovering data movement-related bottlenecks on NVidia GPUs.
-
-!!! GPUscout is in active development, and is not yet in a production-ready stability !!!
+A tool for discovering data movement-related bottlenecks on NVidia GPUs. (Extension to AMD GPUs is coming soon)
 
 GPUscout is a tool for systematical detection of the root cause of frequent memory performance bottlenecks on NVIDIA GPUs.
 It connects three approaches to analysing performance -- static CUDA SASS code analysis, sampling warp stalls, and kernel performance metrics. 
 Connecting these approaches, GPUscout can identify the problem, locate the code segment where it originates, and assess its importance.
+
+The results of the analysis can be visualized and analyzed in the [GPUscout-GUI](https://github.com/caps-tum/GPUscout-GUI).
 
 ## Requirements
 
