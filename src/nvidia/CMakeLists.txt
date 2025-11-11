@@ -27,8 +27,8 @@ install(TARGETS merge_analysis_register_spilling
                 merge_analysis_datatype_conversion
                 merge_analysis_deadlock_detection
                 save_to_json
-        DESTINATION analysis)
-install(PROGRAMS measurements.sh DESTINATION analysis)
+        DESTINATION analysis_nvidia)
+install(PROGRAMS measurements.sh DESTINATION analysis_nvidia)
 
 # TODO currently only on Nvidia:
 configure_file(sampling_utilities/sampling_continuous/Makefile.in sampling_utilities/sampling_continuous/Makefile @ONLY)

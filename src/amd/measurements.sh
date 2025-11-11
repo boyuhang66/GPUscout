@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd "${gpuscout_dir}"/analyses || exit
+cd "${gpuscout_dir}"/analysis_amd || exit
 
 assembly="${gpuscout_tmp_dir}/${executable_filename}.s"
 metrics_dir="${gpuscout_tmp_dir}/metrics"

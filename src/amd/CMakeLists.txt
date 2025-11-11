@@ -17,6 +17,6 @@ install(TARGETS analysis_register_spilling
                 analysis_shared_memory
                 analysis_datatype_conversion
                 analysis_deadlock_detection
-                DESTINATION analyses)
+                DESTINATION analysis_amd)
 
-install(PROGRAMS measurements.sh DESTINATION analyses)
+install(PROGRAMS measurements.sh DESTINATION analysis_amd)

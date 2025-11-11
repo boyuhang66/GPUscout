@@ -80,7 +80,7 @@ ${executable} ${args}
 fi
 
 
-cd ${gpuscout_dir}/analysis
+cd ${gpuscout_dir}/analysis_nvidia
 
 echo "======================================================================================================"
 echo "Combining above results for register spilling analysis . . . . . . . . . . . . . . . "
