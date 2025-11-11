@@ -36,7 +36,7 @@ configure_file(sampling_utilities/sampling_utility/Makefile.in sampling_utilitie
 configure_file(sampling_utilities/generate_sampling_stalls.sh.in sampling_utilities/generate_sampling_stalls.sh @ONLY)
 
 install(DIRECTORY sampling_utilities
-        DESTINATION ..
+        DESTINATION .
         USE_SOURCE_PERMISSIONS
         PATTERN "sampling_continuous/Makefile.in" EXCLUDE
         PATTERN "sampling_utility/Makefile.in" EXCLUDE
