@@ -1,0 +1,386 @@
+#!/bin/bash
+
+# Define the usage function
+usage() {
+    if [ "@VENDOR@" = "nvidia" ] || [ "@VENDOR@" = "all" ]; then
+      echo "Usage (Nvidia): $0 [-h] [--dry-run] [--verbose] -t nvidia -e executable [-c cubin_path] [--args]"
+    fi
+    if [ "@VENDOR@" = "amd" ] || [ "@VENDOR@" = "all" ]; then
+      echo "Usage (AMD): $0 [-h] [--dry-run] [--verbose] -t amd -e executable [-r rga_path] [-a] [-j]"
+    fi
+    echo "  -h | --help : Display this help."
+    echo "  --dry_run : performs only dry_run. A --dry_run will only analyse the SASS instructions. --dry_run will neither read warp stalls nor Nsight metrics "
+    echo "  -v | --verbose : print more verbose output. "
+    if [ "@VENDOR@" = "all" ]; then
+      echo "  -t | --type : Select the GPU vendor. Possible options: nvidia or amd"
+    else
+      echo "  -t | --type : Select the GPU vendor. Possible options: @VENDOR@"
+    fi
+    echo "  -e | --executable : Path to the executable (compiled with nvcc)."
+    if [ "@VENDOR@" = "nvidia" ] || [ "@VENDOR@" = "all" ]; then
+      echo "  -c | --cubin : (Nvidia) Path to the cubin file (compiled with nvcc, with -cubin). If left empty, the same path as executable and the name cubin-<executable> will be assumed."
+    fi
+    if [ "@VENDOR@" = "amd" ] || [ "@VENDOR@" = "all" ]; then
+      echo "  -r | --rga        : (AMD) Path to the RGA (https://gpuopen.com/rga/) binary. E.g. /home/user/downloads/rga-2.11.0.28/rga)."
+    fi
+    echo "  -a | --args : Arguments for running the binary. e.g. --args=\"64 2 2 temp_64 power_64 output_64.txt\""
+    if [ "@VENDOR@" = "nvidia" ] || [ "@VENDOR@" = "all" ]; then
+      echo "  --sm_count : (Nvidia) Can be used to specify the number of streaming multiprocessors of the current GPU, as this will be used in calculations (default: 16)"
+      # TODO Check if possible for AMD
+    fi
+    echo "  -j | --json : Save a JSON-formatted version of the output (Needed for the use of GPUscout-GUI)"
+    exit 1
+}
+
+# Parse command-line options
+if [ "@VENDOR@" = "nvidia" ]; then
+  options=$(getopt -o hvt:e:c:a:j -l help,dry_run,verbose,type:,executable:,cubin:,args:,sm_count:,json -- "$@")
+elif [ "@VENDOR@" = "amd" ]; then
+  options=$(getopt -o hvt:e:r:a:j -l help,dry_run,verbose,type:,executable:,rga:,args:,sm_count:,json -- "$@")
+else
+  options=$(getopt -o hvt:e:c:r:a:j -l help,dry_run,verbose,type:,executable:,cubin:,rga:,args:,sm_count:,json -- "$@")
+fi
+
+if [ $? -ne 0 ]; then
+    echo "Error: Invalid option. Use $0 -h or $0 --help for a list of valid arguments."
+    usage
+fi
+
+eval set -- "$options"
+
+vendor="@VENDOR@"
+dry_run=false
+verbose=false
+json=false
+executable=""
+cubin=""
+rga=""
+args=""
+sms=16
+while true; do
+    case "$1" in
+        -h | --help)
+            usage
+            ;;
+        -e | --executable)
+            executable="$2"
+            shift 2
+            ;;
+        -t | --type)
+            vendor="$2"
+            shift 2
+            ;;
+        -c | --cubin)
+            cubin="$2"
+            nvidia=true
+            shift 2
+            ;;
+        -r | --rga)
+            rga="$2"
+            amd=true
+            shift 2
+            ;;
+        -a | --args)
+            args="$2"
+            shift 2
+            ;;
+        --dry_run)
+            dry_run=true
+            shift
+            ;;
+        -v | --verbose)
+            verbose=true
+            shift
+            ;;
+         -j | --json)
+            json=true
+            shift
+            ;;
+         --sm_count)
+            sms="$2"
+            shift 2
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Error: Internal error during parsing."
+            exit 1
+            ;;
+    esac
+done
+
+#check the params
+if [ -z "$executable" ]; then
+    echo "No executable specified (-e ..)"
+    usage
+fi
+case "@VENDOR@" in
+  amd)
+    if [ "$vendor" != "amd" ]; then
+      echo "Invalid vendor type (-t ..)"
+      usage
+    fi
+    ;;
+  nvidia)
+    if [ "$vendor" != "nvidia" ]; then
+      echo "Invalid vendor type (-t ..)"
+      usage
+    fi
+    ;;
+  all)
+    if [ "$vendor" != "amd" ] && [ "$vendor" != "nvidia" ]; then
+      echo "Invalid vendor type (-t ..)"
+      usage
+    fi
+    ;;
+esac
+
+# get absolute path to executable
+executable_filename=$(basename "$executable")
+executable_dir="$( cd "$( dirname "$executable" )" && pwd )"
+executable="$executable_dir/$executable_filename"
+run_prefix=$executable_filename # TODO Check if needed in AMD version
+if [ ! -f "$executable" ]; then
+    echo "Executable not found at: $executable"
+    exit 1
+fi
+
+# get absolute path to cubin or rga
+if [ "$vendor" = "nvidia" ]; then
+    if [ -z "$cubin" ]; then
+        cubin_filename="cubin-$executable_filename"
+        cubin_dir=$executable_dir
+    else
+        cubin_filename=$(basename "$cubin")
+        cubin_dir="$( cd "$( dirname "$cubin" )" && pwd )"
+
+    fi
+    cubin="$cubin_dir/$cubin_filename"
+    if [ ! -f "$cubin" ]; then
+        echo "ERROR: Cubin file not found at: $cubin"
+        exit 1
+    fi
+fi
+if [ "$vendor" = "amd" ]; then
+    if [ -z "$rga" ]; then
+        # TODO RGA Binary default path
+        rga_filename="rga-todo"
+        rga_dir=$executable_dir
+    else
+        rga_filename=$(basename "$rga")
+        rga_dir="$( cd "$( dirname "$rga" )" && pwd )"
+    fi
+    rga="$rga_dir/$rga_filename"
+    if [ ! -f "$rga" ]; then
+        echo "ERROR: RGA binary not found at: $rga"
+        exit 1
+    fi
+fi
+
+
+# set the temporary and output directory to be inside the GPUscout directory.
+gpuscout_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+gpuscout_tmp_dir="${gpuscout_dir}/tmp-gpuscout"
+gpuscout_output_dir="${gpuscout_tmp_dir}/output"
+
+# Save metrics in a separate directory
+echo "======================================================================================================"
+echo "==== Creating GPUscout TMP directory for storing metrics: ${gpuscout_tmp_dir}"
+mkdir -p ${gpuscout_tmp_dir}
+
+if [ "$json" = true ]; then
+    mkdir -p ${gpuscout_output_dir}
+fi
+
+# Note: when you compile the code with nvcc, create 2 executables
+# 1. without -cubin flag: <executable name>
+# 2. with -cubin flag: prefix the name of the executable with cubin-<executable name>
+
+echo "==== GPUscout is executed with the following arguments:"
+echo "==== Executable: $executable"
+if [ "$vendor" = "nvidia" ]; then
+    echo "==== Cubin:      $cubin"
+elif [ "$vendor" = "amd" ]; then
+    echo "==== RGA: $rga"
+fi
+echo "==== Arguments for the executable file: \"$args\""
+echo "==== Dry-run: $dry_run"
+echo "==== Verbose: $verbose"
+echo "==== JSON Output: $json"
+echo "======================================================================================================"
+
+
+echo "Clearing previous files . . . . . . . . . . . . . . . . . . . . "
+# DO NOT REMOVE sampling_utilities directory !!!!!!!
+rm -rf hpctoolkit-*-measurements 2>/dev/null
+rm -rf hpctoolkit-*-database 2>/dev/null
+rm -rf metrics 2>/dev/null
+rm nvdisasm-hpctoolkit-* 2>/dev/null
+rm nvdisasm-executable-* 2>/dev/null
+rm nvdisasm-registers-hpctoolkit-* 2>/dev/null
+rm nvdisasm-registers-executable-* 2>/dev/null
+rm parser_sass_datatype_conversion 2>/dev/null
+rm parser_ptx 2>/dev/null
+rm pcsampling_*.txt 2>/dev/null
+rm parser_metrics 2>/dev/null
+rm parser_sass_restrict 2>/dev/null
+rm parser_sass_vectorized 2>/dev/null
+rm parser_sass_divergence 2>/dev/null
+rm parser_sass_register_spilling 2>/dev/null
+rm parser_pcsampling 2>/dev/null
+rm parser_sass_deadlock_detection 2>/dev/null
+rm parser_sass_use_texture 2>/dev/null
+rm parser_sass_use_shared 2>/dev/null
+rm merge_analysis_register_spilling 2>/dev/null
+rm merge_analysis_use_restrict 2>/dev/null
+rm merge_analysis_vectorization 2>/dev/null
+rm merge_analysis_global_atomics 2>/dev/null
+rm merge_analysis_warp_divergence 2>/dev/null
+rm merge_analysis_use_texture 2>/dev/null
+rm merge_analysis_use_shared 2>/dev/null
+rm merge_analysis_datatype_conversion 2>/dev/null
+# TODO: Used in AMD Version - Actually needed?
+# rm -f "${gpuscout_tmp_dir}"/* 2>/dev/null
+# rm -f "${gpuscout_output_dir}"/* 2>/dev/null
+
+if [ "$vendor" = "nvidia" ]; then
+    echo "Setting up profiling . . . . . . . . . . . . . . . "
+    # Remove and Create build directory
+    #rm -rf $PWD/build/ && mkdir -p $PWD/build/
+
+    # ------------------------ WITH HPCTOOLKIT ------------------------
+    # # Save your executable in a directory named "executable"
+    # cd $PWD/build/
+    # echo "Loading spack . . . . . . . . . . . . . . . . . . . . "
+    # spack load hpctoolkit@2022.10.01
+    # # for ice1
+    # # module unload hpctoolkit
+    # # module load hpctoolkit/2022.01.15/gcc-11.2.0-module-y42vztd
+
+    # echo "Start profiling with hpctoolkit to generate the gpubin file . . . . . . . . . . . . . . . "
+    # hpcrun -e REALTIME -e gpu=nvidia,pc -t ./../executable/$file_name $args
+    # hpcstruct --gpucfg yes hpctoolkit-$file_name-measurements/
+    # hpcprof hpctoolkit-$file_name-measurements/
+
+    # # Disassemble to get the SASS and ptx and output it to txt file
+    # echo "SASS from hpctoolkit generated gpubin . . . . . . . . . . . . . . . "
+    # # remove the inlined information from nvdisasm
+    # # gpubins-used UNPREDICTABLE!
+    # # nvdisasm -g -c hpctoolkit-$file_name-measurements/gpubins-used/*.gpubin > nvdisasm-hpctoolkit-$file_name-sass.txt
+    # # for ice1
+    # nvdisasm -g -c hpctoolkit-$file_name-measurements/gpubins/*.gpubin > nvdisasm-hpctoolkit-$file_name-sass.txt
+
+    # echo "SASS directly from executable . . . . . . . . . . . . . . . "
+    # nvdisasm -g -c ./../executable/cubin-$file_name > nvdisasm-executable-$file_name-sass.txt
+
+    # echo "ptx directly from executable . . . . . . . . . . . . . . . "
+    # cuobjdump -ptx ./../executable/$file_name > nvdisasm-executable-$file_name-ptx.txt
+
+    # echo "SASS with live register info from hpctoolkit . . . . . . . . . . . . . . . "
+    # # nvdisasm -g -c -lrm=count hpctoolkit-$file_name-measurements/gpubins-used/*.gpubin > nvdisasm-registers-hpctoolkit-$file_name-sass.txt
+    # nvdisasm -g -c -lrm=count hpctoolkit-$file_name-measurements/gpubins/*.gpubin > nvdisasm-registers-hpctoolkit-$file_name-sass.txt
+
+    # echo "SASS with live register info from executable . . . . . . . . . . . . . . . "
+    # nvdisasm -g -c -lrm=count ./../executable/cubin-$file_name > nvdisasm-registers-executable-$file_name-sass.txt
+
+    # cd ..
+
+    # ------------------------ WITHOUT HPCTOOLKIT ------------------------
+    # Still using the name same as before (with hpctoolkit), just for ease
+    # Hence we are running the same commands below twice, once t generate the name with -hpctoolkit- and once to generate the name with -executable-
+
+    cd ${gpuscout_dir}
+    echo -e "Generating binaries . . . . . . . . . . . . . . . . . . . ."
+    nvdisasm -g -c ${cubin} > ${gpuscout_tmp_dir}/nvdisasm-hpctoolkit-${run_prefix}-sass.txt #TODO this line necessary?
+    nvdisasm -g -c ${cubin} > ${gpuscout_tmp_dir}/nvdisasm-executable-${run_prefix}-sass.txt
+    cuobjdump -ptx ${executable} > ${gpuscout_tmp_dir}/nvdisasm-executable-${run_prefix}-ptx.txt
+    nvdisasm -g -c -lrm=count ${cubin} > ${gpuscout_tmp_dir}/nvdisasm-registers-hpctoolkit-${run_prefix}-sass.txt #TODO this line necessary?
+    nvdisasm -g -c -lrm=count ${cubin} > ${gpuscout_tmp_dir}/nvdisasm-registers-executable-${run_prefix}-sass.txt
+
+
+    # Run the generate_sampling_stalls script inside the sampling_utilities directory
+    if [ "$dry_run" = false ]; then
+        echo "Getting warp stall reasons . . . . . . . . . . . . . . . "
+        source ${gpuscout_dir}/sampling_utilities/generate_sampling_stalls.sh
+        cp ${gpuscout_dir}/sampling_utilities/sampling_utility/pcsampling_${run_prefix}.txt ${gpuscout_tmp_dir}/pcsampling_${run_prefix}.txt
+    fi
+elif [ "$vendor" = "amd" ]; then
+    # delete temporary files from a previous run TODO wichitg?
+    echo "==== clearing previous files"
+    rm -f "${gpuscout_tmp_dir}"/* 2>/dev/null
+    rm -f "${gpuscout_output_dir}"/* 2>/dev/null
+
+    cd "${gpuscout_tmp_dir}" || exit
+
+    # creating object file
+    echo "==== creating object file"
+    roc-obj-ls -v "${executable}" | \
+    awk '/gfx90a/{print $3}' | \
+    roc-obj-extract -o
+
+    object_file=$(find "$gpuscout_tmp_dir" -type f -name "*.co")
+    echo "TMP: $gpuscout_tmp_dir"
+
+    # creating assembly file
+    echo "==== creating assembly file"
+
+    echo "Object File: $object_file, Executable File: ${executable_filename}"
+    llvm-objdump -d --mcpu=gfx90a --source -l -C --symbolize-operands "$object_file" > "${executable_filename}".s
+
+    # creating file containing register pressure information
+    echo "==== creating file containing register pressure information "
+    #"$rga" -s bin --livereg reg.txt --co "$object_file"
+
+    echo "======================================================================================================"
+    if [ "$dry_run" = false ]; then
+    #    echo "==== getting PC sampling data"
+        # TODO
+    #    echo "==== TODO"
+
+        echo "==== collecting kernel profiling data"
+
+        # creating profiling data
+        rocprof-compute profile --name "$executable_filename" --no-roof --quiet -- "$executable" "$args"
+
+        mkdir metrics
+
+        # get the number of kernels and their respective kernel names in the executable
+        analysis_output=$(rocprof-compute analyze -p "workloads/$executable_filename/MI200/" --list-stats)
+
+        echo "$analysis_output" | perl -ne 'if (/^│\s*(\d+)\s*│\s*(\w+)[^│]*│$/) { print "$1,$2\n"; }' \
+                                  > metrics/kernel_list.csv
+
+        # analyze each kernel separately
+        while IFS=, read -r kernel_number kernel_name; do
+            # replace spaces and special characters in kernel_name for the output filename
+            sanitized_kernel_name=$(echo "$kernel_name" | tr -c 'a-zA-Z0-9' '_' | sed 's/^_//;s/_$//')
+            output_file="metrics/${executable_filename}_${sanitized_kernel_name}_metrics.txt"
+
+            # execute the per-kernel analysis
+            rocprof-compute analyze \
+            -p "workloads/$executable_filename/MI200" \
+            -b 7.2.4 10.1.6 10.2.14 11.2.5 12.1.0 12.1.1 12.1.3 12.2.5 15.1.9 15.1.13 16.3.3 16.3.5 17.2.7 17.3.1 17.3.4 17.5.10 \
+            -n per_kernel -k "$kernel_number" -o "$output_file" \
+            > /dev/null
+        done < metrics/kernel_list.csv
+    fi
+fi
+
+
+
+# Get the measurements and analysis from the measurements script
+echo "Measurements and Analysis . . . . . . . . . . . . . . . (${gpuscout_dir}/analysis_$vendor/measurements.sh)"
+source ${gpuscout_dir}/analysis_$vendor/measurements.sh
+
+# Exit
+echo -e "Profiling complete! Starting cleanup . . . . . . . . . . . . . . . . . . . ."
+
+rm -rf ${gpuscout_output_dir}
+
+# Remove the PC sampling files generate before release/production, else keep them for debug
+# rm $PWD/sampling_utilities/sampling_continuous/*_pcsampling_*.dat
+# rm $PWD/sampling_utilities/sampling_utility/pcsampling_$file_name.txt
+
+exit 0

@@ -31,9 +31,12 @@ install(TARGETS merge_analysis_register_spilling
 install(PROGRAMS measurements.sh DESTINATION analysis_nvidia)
 
 # TODO currently only on Nvidia:
-configure_file(sampling_utilities/sampling_continuous/Makefile.in sampling_utilities/sampling_continuous/Makefile @ONLY)
-configure_file(sampling_utilities/sampling_utility/Makefile.in sampling_utilities/sampling_utility/Makefile @ONLY)
-configure_file(sampling_utilities/generate_sampling_stalls.sh.in sampling_utilities/generate_sampling_stalls.sh @ONLY)
+#configure_file(sampling_utilities/sampling_continuous/Makefile.in sampling_utilities/sampling_continuous/Makefile @ONLY)
+#configure_file(sampling_utilities/sampling_utility/Makefile.in sampling_utilities/sampling_utility/Makefile @ONLY)
+#configure_file(sampling_utilities/generate_sampling_stalls.sh.in sampling_utilities/generate_sampling_stalls.sh @ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/sampling_utilities/sampling_continuous/Makefile.in ${CMAKE_CURRENT_SOURCE_DIR}/sampling_utilities/sampling_continuous/Makefile @ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/sampling_utilities/sampling_utility/Makefile.in ${CMAKE_CURRENT_SOURCE_DIR}/sampling_utilities/sampling_utility/Makefile @ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/sampling_utilities/generate_sampling_stalls.sh.in ${CMAKE_CURRENT_SOURCE_DIR}/sampling_utilities/generate_sampling_stalls.sh @ONLY)
 
 install(DIRECTORY sampling_utilities
         DESTINATION .
