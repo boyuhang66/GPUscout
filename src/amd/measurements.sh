@@ -4,8 +4,9 @@ cd "${gpuscout_dir}"/analysis_amd || exit
 
 assembly="${gpuscout_tmp_dir}/${executable_filename}.s"
 metrics_dir="${gpuscout_tmp_dir}/metrics"
+livereg_dir="${gpuscout_tmp_dir}/livereg"
 
-./analysis_register_spilling  "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
+./analysis_register_spilling  "${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}"
 
 ./analysis_restrict "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
 

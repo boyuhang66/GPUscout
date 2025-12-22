@@ -331,7 +331,8 @@ elif [ "$vendor" = "amd" ]; then
 
     # creating file containing register pressure information
     echo "==== creating file containing register pressure information "
-    #"$rga" -s bin --livereg reg.txt --co "$object_file"
+    mkdir livereg
+    "$rga" -s bin --livereg livereg/vgpr.txt --co "$object_file"
 
     echo "======================================================================================================"
     if [ "$dry_run" = false ]; then

@@ -1,4 +1,5 @@
 #include "parser_amdgcn_register_spilling.hpp"
+#include "parser_liveregisters.hpp"
 #include "parser_metrics.hpp"
 #include "utilities/json.hpp"
 
@@ -11,7 +12,8 @@ using json = nlohmann::json;
 
 json analysis_register_spilling (
     const std::unordered_map<std::string, std::vector<mem>>& mem_map,
-    std::unordered_map<std::string, mtc> mtc_map)
+    std::unordered_map<std::string, mtc> mtc_map,
+    std::unordered_map<std::string, std::vector<live_registers>> live_register_map)
 {
     json result;
 
@@ -73,38 +75,26 @@ json analysis_register_spilling (
                     };
                 }
 
-                // TODO register pressure
-
-                // convert the PC offset in hex to decimal.
-                //int PC_offset = std::stoul(mem_obj.PC_offset, nullptr, 16);
+                // --------- Register Pressure ------------------
                 // search for a match between the PC offset of the current local memory instruction and the PC offset of
                 // an entry in the live register map
-                //auto it = std::find_if(
-                //    map_live_reg[krn_name].begin(),
-                //    map_live_reg[krn_name].end(),
-                //    [&](const auto &i) { return PC_offset == std::stoul(i.PC_offset, nullptr, 16); }
-                //);
+                auto reg_search_it = std::find_if(
+                    live_register_map[krn_name].begin(),
+                    live_register_map[krn_name].end(),
+                    [&](const auto &i) { return mem_obj.PC_offset == i.pcOffset; }
+                    );
 
-                //if (it != map_live_reg[krn_name].end())
-                //{
-                //    std::cout << "==== INFO" << std::endl;
-                //    std::cout << "==== total current registers for the AMDGCN ISA instruction: "
-                //              << it->gen_reg + it->pred_reg + it->u_gen_reg << std::endl;
+                if (reg_search_it != live_register_map[krn_name].end()) {
+                    std::cout << "==== INFO :: Total current registers for the AMDGCN ISA instruction: " << reg_search_it->vgp_reg << std::endl;
+                    line_result["used_register_count"] = reg_search_it->vgp_reg;
 
-                //    inst_result["used_register_count"] = it->gen_reg + it->pred_reg + it->u_gen_reg;
-
-                //    if (it->change_reg_from_last > 0)
-                //    {
-                //        std::cout << "==== increased register pressure with " << std::abs(it->change_reg_from_last)
-                //                  << " more registers compared to last AMDGCN ISA instruction" << std::endl;
-
-                //        inst_result["register_pressure_increase"] = std::abs(it->change_reg_from_last);
-                //    }
-                //    else
-                //    {
-                //        inst_result["register_pressure_increase"] = 0;
-                //    }
-                //}
+                    if (reg_search_it->change_reg_from_last > 0) {
+                        std::cout << "Increased register pressure with " << std::abs(reg_search_it->change_reg_from_last) << " more registers compared to last AMGGCN ISA instruction" << std::endl;
+                        line_result["register_pressure_increase"] = std::abs(reg_search_it->change_reg_from_last);
+                    } else {
+                        line_result["register_pressure_increase"] = 0;
+                    }
+                }
 
                 // TODO PC stall
 
@@ -159,12 +149,14 @@ int main(int argc, char **argv)
     std::string mtc_dir = argv[2];
     auto mtc_map = parser_metrics(mtc_dir);
 
-    //TODO live registers
+    // live registers
+    std::string livereg_dir = argv[3];
+    std::unordered_map<std::string, std::vector<live_registers>> live_register_map = live_registers_analysis(livereg_dir, assembly);
 
-    bool save_as_json = std::strcmp(argv[3], "true") == 0;
-    std::string json_out_dir = argv[4];
+    bool save_as_json = std::strcmp(argv[4], "true") == 0;
+    std::string json_out_dir = argv[5];
 
-    json result = analysis_register_spilling(mem_map, mtc_map);
+    json result = analysis_register_spilling(mem_map, mtc_map, live_register_map);
 
     if (save_as_json)
     {
