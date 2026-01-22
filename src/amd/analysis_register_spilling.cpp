@@ -55,7 +55,7 @@ json analysis_register_spilling (
                 json line_result = {
                     {"file_name", mem_obj.loc.file_name},
                     {"line_number", mem_obj.loc.line_num},
-                    {"PC_offset", mem_obj.PC_offset},
+                    {"pc_offset", mem_obj.PC_offset},
                     {"instruction", mem_obj.name},
                     {"vdata_register", mem_obj.reg_num}
                 };
