@@ -45,6 +45,7 @@ int main(int argc, char **argv)
     int sm_count = std::stoi(argv[8]);
 
     json result = {
+        {"vendor", "nvidia"}, // TODO Compile check
         {"kernels", json::object()},
         {"analyses", json::object()},
         {"metrics", json::object()},
