@@ -317,17 +317,26 @@ elif [ "$vendor" = "amd" ]; then
     # creating object file
     echo "==== creating object file"
     roc-obj-ls -v "${executable}" | \
-    awk '/gfx90a/{print $3}' | \
+    awk '/amdgcn/{print $3}' | \
     roc-obj-extract -o
+    #roc-obj-ls -v "${executable}" | \
+    #awk '/gfx90a/{print $3}' | \
+    #roc-obj-extract -o
 
     object_file=$(find "$gpuscout_tmp_dir" -type f -name "*.co")
     echo "TMP: $gpuscout_tmp_dir"
 
+    # Extracting mcpu name / LLVM target name
+    llvm_target_name=$(roc-obj-ls -v "${executable}" | \
+    awk '/amdgcn/ {match($0, /gfx[0-9a-f]+/); print substr($0, RSTART, RLENGTH)}')
+
+
     # creating assembly file
     echo "==== creating assembly file"
 
-    echo "Object File: $object_file, Executable File: ${executable_filename}"
-    llvm-objdump -d --mcpu=gfx90a --source -l -C --symbolize-operands "$object_file" > "${executable_filename}".s
+    echo "Object File: $object_file, Executable File: ${executable_filename}, LLVM Target: ${llvm_target_name}"
+    #llvm-objdump -d --mcpu=gfx90a --source -l -C --symbolize-operands "$object_file" > "${executable_filename}".s
+    llvm-objdump -d --mcpu="${llvm_target_name}" --source -l -C --symbolize-operands "$object_file" > "${executable_filename}".s
 
     # creating file containing register pressure information
     echo "==== creating file containing register pressure information "
