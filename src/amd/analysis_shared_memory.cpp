@@ -1,6 +1,6 @@
 #include "parser_amdgcn_shared_memory.hpp"
 #include "parser_metrics.hpp"
-#include "utilities/json.hpp"
+#include "../utilities/json.hpp"
 
 using json = nlohmann::json;
 

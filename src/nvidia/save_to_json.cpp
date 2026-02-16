@@ -1,6 +1,6 @@
 #include "parser_metrics.hpp"
 #include "parser_pcsampling.hpp"
-#include "utilities/json.hpp"
+#include "../utilities/json.hpp"
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>

@@ -11,7 +11,7 @@
 #include "parser_pcsampling.hpp"
 #include "parser_metrics.hpp"
 #include "parser_liveregisters.hpp"
-#include "utilities/json.hpp"
+#include "../utilities/json.hpp"
 #include <ostream>
 #include <string>
 

@@ -21,7 +21,7 @@
 #include <algorithm>
 #include <memory>
 #include <cmath>
-#include "utilities/json.hpp"
+#include "../utilities/json.hpp"
 
 using json = nlohmann::json;
 

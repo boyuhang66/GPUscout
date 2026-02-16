@@ -1,6 +1,6 @@
 #include "parser_amdgcn_atomic_instruction.hpp"
 #include "parser_metrics.hpp"
-#include "utilities/json.hpp"
+#include "../utilities/json.hpp"
 #include <iostream>
 
 using json = nlohmann::json;

@@ -1,7 +1,7 @@
 #include "parser_amdgcn_register_spilling.hpp"
 #include "parser_liveregisters.hpp"
 #include "parser_metrics.hpp"
-#include "utilities/json.hpp"
+#include "../utilities/json.hpp"
 
 #include <unordered_map>
 #include <iostream>

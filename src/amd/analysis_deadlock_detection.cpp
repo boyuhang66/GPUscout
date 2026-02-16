@@ -1,5 +1,5 @@
 #include "parser_amdgcn_deadlock_detection.hpp"
-#include "utilities/json.hpp"
+#include "../utilities/json.hpp"
 
 using json = nlohmann::json;
 
