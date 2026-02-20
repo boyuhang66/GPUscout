@@ -28,6 +28,7 @@ int main(int argc, char **argv) {
     std::string json_files_dir = argv[1];
     std::string output_file_path = argv[2];
     std::string assembly_file = argv[3];
+    std::string metrics_dir = argv[4];
     //std::string sass_file = argv[3];
     //std::string sass_register_file = argv[4];
     //std::string ptx_file = argv[5];
