@@ -71,7 +71,7 @@ std::unordered_map<std::string, mtc> parser_metrics(const std::string &dir)
 
             if (std::regex_match(filename, file_match, file_pattern)) 
 	        {
-                mtc mtc_obj;
+                mtc mtc_obj = {0}; // zero initialized to prevent undefined behaviour
                 std::string krn_name = file_match[1];
                 std::ifstream file(entry.path());
 
