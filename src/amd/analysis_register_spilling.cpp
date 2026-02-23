@@ -112,6 +112,7 @@ json analysis_register_spilling (
             std::cout << "==== no register spilling detected in kernel " << krn_name << std::endl;
         }
 
+        // Metrics
         auto mtc_obj = mtc_map[krn_name];
 
         auto approx_percent = mtc_obj.ID_17_3_1 ? mtc_obj.ID_15_1_9 * mtc_obj.ID_16_3_5 / mtc_obj.ID_17_3_1 : 0.0;
@@ -147,7 +148,7 @@ int main(int argc, char **argv)
     //TODO PC stalls
 
     std::string mtc_dir = argv[2];
-    auto mtc_map = parser_metrics(mtc_dir);
+    auto mtc_map = parser_metrics(mtc_dir, assembly);
 
     // live registers
     std::string livereg_dir = argv[3];

@@ -79,7 +79,7 @@ int main(int argc, char **argv)
     auto reg_map = parser_restrict(assembly);
 
     std::string mtc_dir = argv[2];
-    auto mtc_map = parser_metrics(mtc_dir);
+    auto mtc_map = parser_metrics(mtc_dir, assembly);
 
     auto save_as_json = std::strcmp(argv[3], "true") == 0;
     std::string json_out_dir = argv[4];

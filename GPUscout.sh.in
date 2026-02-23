@@ -359,7 +359,7 @@ elif [ "$vendor" = "amd" ]; then
         gpu_name=$(ls "workloads/$executable_filename/")
         # get the number of kernels and their respective kernel names in the executable
         analysis_output=$(rocprof-compute analyze -p "workloads/$executable_filename/$gpu_name/" --list-stats)
-        echo "$analysis_output" | perl -ne 'if (/^│\s*(\d+)\s*│\s*(\w+)[^│]*│$/) { print "$1,$2\n"; }' \
+        echo "$analysis_output" | perl -ne 'if (/^│\s*(\d+)\s*│\s*(\w+.*\))\s*│$/) { print "$1,$2\n"; }' \
                                   > metrics/kernel_list.csv
 
         # Need to move everything into metrics folder because the analyze mode cant save the result in a directory

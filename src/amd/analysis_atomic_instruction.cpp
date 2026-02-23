@@ -132,6 +132,7 @@ json analysis_atomic_instruction(
 
         // TODO PC stall
 
+        // Metrics
         auto mtc_obj = mtc_map[krn_name];
 
 	    std::cout << std::endl;
@@ -171,7 +172,7 @@ int main(int argc, char **argv)
     auto lbl_map = std::get<1>(tuple);
 
     std::string mtc_dir = argv[2];
-    auto mtc_map = parser_metrics(mtc_dir);
+    auto mtc_map = parser_metrics(mtc_dir, assembly);
 
     int save_as_json = std::strcmp(argv[3], "true") == 0;
     std::string json_out_dir = argv[4];
