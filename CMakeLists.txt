@@ -20,6 +20,7 @@ endif()
 if(VENDOR STREQUAL "amd" OR VENDOR STREQUAL "all")
     add_subdirectory(src/amd)
 endif()
+include_directories(src/utilities)
 
 configure_file(GPUscout.sh.in ${CMAKE_CURRENT_BINARY_DIR}/GPUscout.sh @ONLY)
 
