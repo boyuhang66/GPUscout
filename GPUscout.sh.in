@@ -336,12 +336,12 @@ elif [ "$vendor" = "amd" ]; then
 
     echo "Object File: $object_file, Executable File: ${executable_filename}, LLVM Target: ${llvm_target_name}"
     #llvm-objdump -d --mcpu=gfx90a --source -l -C --symbolize-operands "$object_file" > "${executable_filename}".s
-    llvm-objdump -d --mcpu="${llvm_target_name}" --source -l -C --symbolize-operands "$object_file" > "${executable_filename}".s
+    llvm-objdump -d --mcpu="${llvm_target_name}" --source -l --symbolize-operands "$object_file" > "${executable_filename}".s
 
     # creating file containing register pressure information
     echo "==== creating file containing register pressure information "
     mkdir livereg
-    "$rga" -s bin --livereg livereg/vgpr.txt --co "$object_file"
+    "$rga" -s bin --livereg livereg/9_73_23_42_${executable_filename}-vgpr.txt --co "$object_file" # 9_73_23_42 to make kernel name extraction easier
 
     echo "======================================================================================================"
     if [ "$dry_run" = false ]; then

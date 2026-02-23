@@ -7,9 +7,23 @@
 
 #include <regex>
 
-// matches lines containing a command with the kernel name
+// matches lines containing a command with the demangled kernel name
 // ; vectorAdd(float const*, float const*, float*, int)():
-std::regex regex_krn_name("^;\\s(\\w+)\\([\\w,\\*\\s]*\\)\\(\\):\\s*");
+std::regex regex_krn_name_demangled("^;"
+                          "\\s"  // matches leading whitespace
+                          "(\\w+)" // matches kernel name (group 1)
+                          "\\([\\w,\\*\\s]*\\)" // matches parameters
+                          "\\(\\)" // matches ()
+                          ":\\s*"); // matches : and following whitespaces
+
+// matches lines containing a command with the mangled kernel name
+// ; _Z14spillingKernelPfS_():
+std::regex regex_krn_name("^;"
+                          "\\s"  // matches leading whitespace
+                          "(_+Z\\d+" // matches _Z<digits> (group 1)
+                          "\\w+)" // matches kernel name  (group 1)
+                          "\\(\\)" // matches ()
+                          ":\\s*"); // matches : and following whitespaces
 
 // matches lines containing source code location information
 // ; /home/ab62cde2/SourceCode/DoubleKernel.cpp:6

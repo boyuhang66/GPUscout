@@ -64,6 +64,18 @@ inline std::regex regex_assembly_instruction() {
     );
 }
 
+// captures the mangled kernel name
+inline std::regex regex_mangled_live_kernel_name() {
+    // Example: gfx90a__Z12vectorKernelPfS__9_73_23_42_reg-spill-vec-vgpr.txt
+    return std::regex(
+        "^"                                       // regex must match from the beginning of the string
+        "[^_]*_"                                  // matches the llvm target name e.g. gfx90a_
+        "(\\w*)"                                  // matches the mangled kernel name e.g. _Z12vectorKernelPfS_
+        "_9_73_23_42_"                             // matches the _9_73_23_42_ delimiter
+        ".*\\.txt"                                 // matches ${executable_filename}-vgpr.txt
+    );
+}
+
 
 /// @brief Each instruction contains number of currently active registers, corresponding to the pcOffset of the instruction and line inside of the kernel
 struct live_registers
@@ -75,8 +87,8 @@ struct live_registers
     int change_reg_from_last; // change in number of registers compared to the last SASS instruction
 };
 
-/// @brief Extracts the kernel name of RGA generated live register analysis files
-std::string extract_kernel_name(const std::string& filename) {
+/// @brief Extracts the demangled kernel name of RGA generated live register analysis files
+std::string extract_kernel_name_demangle(const std::string& filename) {
     // Example: gfx90a__Z12vectorKernelPfS__reg-spill-vec-vgpr.txt
     // <llvm target name>__Z<length of function name><function name>...
     auto pos = filename.find("_Z");
@@ -96,6 +108,17 @@ std::string extract_kernel_name(const std::string& filename) {
     }
 
     return filename.substr(pos, len);
+}
+
+/// @brief Extracts the mangled kernel name of RGA generated live register analysis files
+std::string extract_kernel_name(const std::string& filename) {
+    // Example: gfx90a__Z12vectorKernelPfS__9_73_23_42_reg-spill-vec-vgpr.txt
+    std::smatch m;
+
+    if (std::regex_search(filename, m, regex_mangled_live_kernel_name())) {
+        return m[1].str();
+    }
+    return "ERROR"; // should not be reached
 }
 
 
