@@ -1,4 +1,5 @@
 #include "parser_metrics.hpp"
+#include "parser_liveregisters.hpp"
 //#include "parser_pcsampling.hpp"
 #include "../utilities/json.hpp"
 #include "../utilities/helper.hpp"
@@ -25,11 +26,19 @@ inline std::regex regex_source_file_path() {
     );
 }
 
+// Defines the register pressure json output
+void to_json(json& j_obj, const live_registers& registers) {
+    j_obj["pcOffset"] = registers.pcOffset;
+    j_obj["vgp_reg"] = registers.vgp_reg;
+}
+
+
 int main(int argc, char **argv) {
     std::string json_files_dir = argv[1];
     std::string output_file_path = argv[2];
     std::string assembly_file = argv[3];
     std::string metrics_dir = argv[4];
+    std::string livereg_dir = argv[5];
     //std::string sass_file = argv[3];
     //std::string sass_register_file = argv[4];
     //std::string ptx_file = argv[5];
@@ -48,6 +57,7 @@ int main(int argc, char **argv) {
                 //{"sass_registers", ""},
                 //{"ptx", ""},
         }},
+        {"register_pressure", json::object()},
         {"source_files", json::object()},
         {"kernels", json::object()} //TODO KERNEL in json - Z... und demangled Version. Auch bei Analysen demangled Version verwenden
     };
@@ -78,6 +88,18 @@ int main(int argc, char **argv) {
         analysis_file.close();
     }
 
+
+
+
+
+    // Add register pressure information - to_json function is used to transfer to json
+    std::unordered_map<std::string, std::vector<live_registers>> live_register_map;
+    live_register_map = live_registers_analysis(livereg_dir, assembly_file);
+    json json_pressure = {};
+    for (auto [kernel_name, vec_registers] : live_register_map) {
+        json_pressure[kernel_name] = vec_registers;
+    }
+    result["register_pressure"] = json_pressure;
 
 
 
