@@ -1,5 +1,6 @@
 #include "parser_amdgcn_vectorized_load.hpp"
 #include "parser_metrics.hpp"
+#include "parser_liveregisters.hpp"
 #include "../utilities/json.hpp"
 
 using json = nlohmann::json;
@@ -7,7 +8,8 @@ using json = nlohmann::json;
 json analysis_vectorized_load(
     const std::unordered_map<std::string, int>& ld_cnt_map,
     const std::unordered_map<std::string, std::vector<ld>>& ld_map,
-    std::unordered_map<std::string, mtc> mtc_map)
+    std::unordered_map<std::string, mtc> mtc_map,
+    std::unordered_map<std::string, std::vector<live_registers>> live_register_map)
 {
     json result;
 
@@ -102,6 +104,27 @@ json analysis_vectorized_load(
                         };
                     }
 
+                    // --------- Register Pressure ------------------
+                    // search for a match between the PC offset of the current local load instruction and the PC offset of
+                    // an entry in the live register map
+                    auto reg_search_it = std::find_if(
+                        live_register_map[krn_name].begin(),
+                        live_register_map[krn_name].end(),
+                        [&](const auto &i) { return ld_obj.PC_offset == i.pcOffset; }
+                        );
+
+                    if (reg_search_it != live_register_map[krn_name].end()) {
+                        std::cout << "==== INFO :: Total current registers for the AMDGCN ISA instruction: " << reg_search_it->vgp_reg << std::endl;
+                        line_result["used_register_count"] = reg_search_it->vgp_reg;
+
+                        if (reg_search_it->change_reg_from_last > 0) {
+                            std::cout << "Increased register pressure with " << std::abs(reg_search_it->change_reg_from_last) << " more registers compared to last AMGGCN ISA instruction" << std::endl;
+                            line_result["register_pressure_increase"] = std::abs(reg_search_it->change_reg_from_last);
+                        } else {
+                            line_result["register_pressure_increase"] = 0;
+                        }
+                    }
+
                     // TODO PC stall and register pressure
 
                     if (!line_result.is_null())
@@ -136,10 +159,14 @@ int main(int argc, char **argv)
     std::string mtc_dir = argv[2];
     auto mtc_map = parser_metrics(mtc_dir, assembly);
 
+    // live registers
+    std::string livereg_dir = argv[3];
+    std::unordered_map<std::string, std::vector<live_registers>> live_register_map = live_registers_analysis(livereg_dir, assembly);
+
     int save_as_json = std::strcmp(argv[3], "true") == 0;
     std::string json_out_dir = argv[4];
 
-    json result = analysis_vectorized_load(ld_cnt_map, ld_map, mtc_map);
+    json result = analysis_vectorized_load(ld_cnt_map, ld_map, mtc_map, live_register_map);
 
     if (save_as_json)
     {
