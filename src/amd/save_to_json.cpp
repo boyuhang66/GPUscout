@@ -1,6 +1,7 @@
 #include "parser_metrics.hpp"
 //#include "parser_pcsampling.hpp"
 #include "../utilities/json.hpp"
+#include "../utilities/helper.hpp"
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -67,11 +68,12 @@ int main(int argc, char **argv) {
         if (analysis_file.is_open()) {
             result["analyses"][filename] = json::parse(analysis_file);
 
-            //for (auto& kernel : result["analyses"][filename].items()) {
-            //    if (!result["kernels"].contains(kernel.key())) {
-            //        result["kernels"][kernel.key()] = get_demangled_kernel(kernel.key());
-            //    }
-            //}
+            // Add kernel mangled and demangled kernel names if not already present
+            for (auto& kernel : result["analyses"][filename].items()) {
+                if (!result["kernels"].contains(kernel.key())) {
+                    result["kernels"][kernel.key()] = get_demangled_kernel(kernel.key(), "c++filt");
+                }
+            }
         }
         analysis_file.close();
     }
