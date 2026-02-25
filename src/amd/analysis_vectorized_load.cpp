@@ -58,6 +58,7 @@ json analysis_vectorized_load(
                                   << " adjacent memory accesses" << std::endl;
 
                         line_result = {
+                            {"severity", "WARNING"},
                             {"file_name", ld_obj.loc.file_name},
                             {"line_number", ld_obj.loc.line_num},
                             {"pc_offset", ld_obj.PC_offset},
@@ -96,6 +97,7 @@ json analysis_vectorized_load(
                         }
 
                         line_result = {
+                            {"severity", "INFO"},
                             {"file_name", ld_obj.loc.file_name},
                             {"line_number", ld_obj.loc.line_num},
                             {"pc_offset", ld_obj.PC_offset},
