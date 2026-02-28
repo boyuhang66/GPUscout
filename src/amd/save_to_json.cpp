@@ -30,6 +30,7 @@ inline std::regex regex_source_file_path() {
 void to_json(json& j_obj, const live_registers& registers) {
     j_obj["pcOffset"] = registers.pcOffset;
     j_obj["vgp_reg"] = registers.vgp_reg;
+    j_obj["sgp_reg"] = registers.sgp_reg;
 }
 
 

@@ -342,6 +342,7 @@ elif [ "$vendor" = "amd" ]; then
     echo "==== creating file containing register pressure information "
     mkdir livereg
     "$rga" -s bin --livereg livereg/9_73_23_42_${executable_filename}-vgpr.txt --co "$object_file" # 9_73_23_42 to make kernel name extraction easier
+    "$rga" -s bin --livereg-sgpr livereg/9_73_23_42_${executable_filename}-sgpr.txt --co "$object_file"
 
     echo "======================================================================================================"
     if [ "$dry_run" = false ]; then

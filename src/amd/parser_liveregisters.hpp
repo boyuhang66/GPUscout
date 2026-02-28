@@ -72,10 +72,16 @@ inline std::regex regex_mangled_live_kernel_name() {
         "[^_]*_"                                  // matches the llvm target name e.g. gfx90a_
         "(\\w*)"                                  // matches the mangled kernel name e.g. _Z12vectorKernelPfS_
         "_9_73_23_42_"                             // matches the _9_73_23_42_ delimiter
-        ".*\\.txt"                                 // matches ${executable_filename}-vgpr.txt
+        ".*(vgpr|sgpr)\\.txt"                     // matches ${executable_filename}-vgpr.txt and groups the type of register
     );
 }
 
+/// @brief Contains the filename as well as the type of the analysed register
+struct pressure_file
+{
+    std::string filename;
+    std::string type;
+};
 
 /// @brief Each instruction contains number of currently active registers, corresponding to the pcOffset of the instruction and line inside of the kernel
 struct live_registers
@@ -84,7 +90,8 @@ struct live_registers
     std::string pcOffset;
     std::string instruction;
     int vgp_reg;
-    int change_reg_from_last; // change in number of registers compared to the last SASS instruction
+    int sgp_reg;
+    int change_reg_from_last; // change in number of registers compared to the last assembly instruction
 };
 
 /// @brief Extracts the demangled kernel name of RGA generated live register analysis files
@@ -110,15 +117,21 @@ std::string extract_kernel_name_demangle(const std::string& filename) {
     return filename.substr(pos, len);
 }
 
-/// @brief Extracts the mangled kernel name of RGA generated live register analysis files
-std::string extract_kernel_name(const std::string& filename) {
+/// @brief Extracts the mangled kernel name as well as the register type of RGA generated live register analysis files
+pressure_file extract_kernel_name(const std::string& filename) {
     // Example: gfx90a__Z12vectorKernelPfS__9_73_23_42_reg-spill-vec-vgpr.txt
+    pressure_file pf;
     std::smatch m;
 
     if (std::regex_search(filename, m, regex_mangled_live_kernel_name())) {
-        return m[1].str();
+        pressure_file pf;
+        pf.filename = m[1].str();
+        pf.type = m[2].str();
+        return pf;
     }
-    return "ERROR"; // should not be reached
+    pf.filename = "ERROR"; // should not be reached
+
+    return pf;
 }
 
 
@@ -134,7 +147,7 @@ std::unordered_map<std::string, std::vector<live_registers> > live_registers_ana
     for (const auto& file : fs::directory_iterator(path)) {
         if (file.is_regular_file()) {
             std::string filename = file.path().filename().string();
-            if (std::regex_match(filename, vgpr_regex)) {
+            if (std::regex_match(filename, regex_mangled_live_kernel_name())) {
                 filenames.push_back(file.path());
             }
         }
@@ -145,13 +158,15 @@ std::unordered_map<std::string, std::vector<live_registers> > live_registers_ana
     std::unordered_map<std::string, std::vector<live_registers>> live_reg_map;
     std::vector<live_registers> reg_vec;
     std::string kernel_name;
+    std::string reg_type;
 
     // Go through every kernel register pressure file
     for (auto filename : filenames) {
         std::fstream file(filename, std::ios::in);
         std::string line;
 
-        kernel_name = extract_kernel_name(filename);
+        kernel_name = extract_kernel_name(filename).filename;
+        reg_type = extract_kernel_name(filename).type;
         int last_inst_register_count = 0;
         reg_vec.clear();
 
@@ -178,21 +193,58 @@ std::unordered_map<std::string, std::vector<live_registers> > live_registers_ana
                         reg_obj.line = std::stoi(match[1].str());
                         reg_obj.pcOffset = "";
                         reg_obj.instruction = match[5].str();
-                        reg_obj.vgp_reg = std::stoi(match[2].str());
-                        reg_obj.change_reg_from_last = reg_obj.vgp_reg - last_inst_register_count;
+                        if (reg_type == "vgpr") {
+                            reg_obj.vgp_reg = std::stoi(match[2].str());
+                            reg_obj.change_reg_from_last = reg_obj.vgp_reg - last_inst_register_count;
+                        }
+                        else if (reg_type == "sgpr") {
+                            reg_obj.sgp_reg = std::stoi(match[2].str());
+                            reg_obj.change_reg_from_last = reg_obj.sgp_reg - last_inst_register_count;
+                        }
                     }
                     else {
                         reg_obj.line = std::stoi(match[1].str());
                         reg_obj.pcOffset = "";
                         reg_obj.instruction = match[4].str();
-                        reg_obj.vgp_reg = std::stoi(match[2].str());
-                        reg_obj.change_reg_from_last = reg_obj.vgp_reg - last_inst_register_count;
+                        if (reg_type == "vgpr") {
+                            reg_obj.vgp_reg = std::stoi(match[2].str());
+                            reg_obj.change_reg_from_last = reg_obj.vgp_reg - last_inst_register_count;
+                        }
+                        else if (reg_type == "sgpr") {
+                            reg_obj.sgp_reg = std::stoi(match[2].str());
+                            reg_obj.change_reg_from_last = reg_obj.sgp_reg - last_inst_register_count;
+                        }
                     }
 
-                    last_inst_register_count = reg_obj.vgp_reg;
+                    last_inst_register_count = (reg_type == "vgpr") ? reg_obj.vgp_reg : reg_obj.sgp_reg;
                     reg_vec.push_back(reg_obj);
                 }
             }
+
+            // Check if there is already a entry under the kernel_name
+            // If yes the sgpr or vgpr needs to be added to the existing one
+            if (live_reg_map.find(kernel_name) == live_reg_map.end()) {
+                live_reg_map[kernel_name] = reg_vec;
+            }
+            else {
+                // Merge vgpr and sgpr
+                std::vector<live_registers> tmp_reg_vec;
+                tmp_reg_vec = live_reg_map[kernel_name];
+
+                if (reg_type == "vgpr") {
+                    // Iterate through every element and merge them
+                    for(unsigned i = 0; i < reg_vec.size(); i++) {
+                        reg_vec[i].sgp_reg = tmp_reg_vec[i].sgp_reg;
+                    }
+                }
+                else {
+                    // Iterate through every element and merge them
+                    for(unsigned i = 0; i < reg_vec.size(); i++) {
+                        reg_vec[i].vgp_reg = tmp_reg_vec[i].vgp_reg;
+                    }
+                }
+            }
+
             live_reg_map[kernel_name] = reg_vec;
         }
         else
