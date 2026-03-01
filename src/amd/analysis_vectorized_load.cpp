@@ -110,12 +110,12 @@ json analysis_vectorized_load(
                     // search for a match between the PC offset of the current local load instruction and the PC offset of
                     // an entry in the live register map
                     auto reg_search_it = std::find_if(
-                        live_register_map[krn_name].begin(),
-                        live_register_map[krn_name].end(),
+                        live_register_map[krn_name_1].begin(),
+                        live_register_map[krn_name_1].end(),
                         [&](const auto &i) { return ld_obj.PC_offset == i.pcOffset; }
                         );
 
-                    if (reg_search_it != live_register_map[krn_name].end()) {
+                    if (reg_search_it != live_register_map[krn_name_1].end()) {
                         std::cout << "==== INFO :: Total current registers for the AMDGCN ISA instruction: " << reg_search_it->vgp_reg << std::endl;
                         line_result["used_register_count"] = reg_search_it->vgp_reg;
 
