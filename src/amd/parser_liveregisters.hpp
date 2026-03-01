@@ -91,7 +91,10 @@ struct live_registers
     std::string instruction;
     int vgp_reg;
     int sgp_reg;
-    int change_reg_from_last; // change in number of registers compared to the last assembly instruction
+    int total;
+    int change_vgpr_from_last; // change in number of vgpr registers compared to the last assembly instruction
+    int change_sgpr_from_last;
+    int change_total_from_last;
 };
 
 /// @brief Extracts the demangled kernel name of RGA generated live register analysis files
@@ -195,11 +198,11 @@ std::unordered_map<std::string, std::vector<live_registers> > live_registers_ana
                         reg_obj.instruction = match[5].str();
                         if (reg_type == "vgpr") {
                             reg_obj.vgp_reg = std::stoi(match[2].str());
-                            reg_obj.change_reg_from_last = reg_obj.vgp_reg - last_inst_register_count;
+                            reg_obj.change_vgpr_from_last = reg_obj.vgp_reg - last_inst_register_count;
                         }
                         else if (reg_type == "sgpr") {
                             reg_obj.sgp_reg = std::stoi(match[2].str());
-                            reg_obj.change_reg_from_last = reg_obj.sgp_reg - last_inst_register_count;
+                            reg_obj.change_sgpr_from_last = reg_obj.sgp_reg - last_inst_register_count;
                         }
                     }
                     else {
@@ -208,11 +211,11 @@ std::unordered_map<std::string, std::vector<live_registers> > live_registers_ana
                         reg_obj.instruction = match[4].str();
                         if (reg_type == "vgpr") {
                             reg_obj.vgp_reg = std::stoi(match[2].str());
-                            reg_obj.change_reg_from_last = reg_obj.vgp_reg - last_inst_register_count;
+                            reg_obj.change_vgpr_from_last = reg_obj.vgp_reg - last_inst_register_count;
                         }
                         else if (reg_type == "sgpr") {
                             reg_obj.sgp_reg = std::stoi(match[2].str());
-                            reg_obj.change_reg_from_last = reg_obj.sgp_reg - last_inst_register_count;
+                            reg_obj.change_sgpr_from_last = reg_obj.sgp_reg - last_inst_register_count;
                         }
                     }
 
@@ -231,17 +234,18 @@ std::unordered_map<std::string, std::vector<live_registers> > live_registers_ana
                 std::vector<live_registers> tmp_reg_vec;
                 tmp_reg_vec = live_reg_map[kernel_name];
 
-                if (reg_type == "vgpr") {
-                    // Iterate through every element and merge them
-                    for(unsigned i = 0; i < reg_vec.size(); i++) {
+                // Iterate through every element and merge them
+                for(unsigned i = 0; i < reg_vec.size(); i++) {
+                    if (reg_type == "vgpr") { // Currently vgpr was analysed so there has to be a sgpr already present
                         reg_vec[i].sgp_reg = tmp_reg_vec[i].sgp_reg;
+                        reg_vec[i].change_sgpr_from_last = tmp_reg_vec[i].change_sgpr_from_last;
                     }
-                }
-                else {
-                    // Iterate through every element and merge them
-                    for(unsigned i = 0; i < reg_vec.size(); i++) {
+                    else {
                         reg_vec[i].vgp_reg = tmp_reg_vec[i].vgp_reg;
+                        reg_vec[i].change_vgpr_from_last = tmp_reg_vec[i].change_vgpr_from_last;
                     }
+                    reg_vec[i].total = reg_vec[i].vgp_reg + reg_vec[i].sgp_reg;
+                    reg_vec[i].change_total_from_last = reg_vec[i].change_sgpr_from_last + reg_vec[i].change_vgpr_from_last;
                 }
             }
 
