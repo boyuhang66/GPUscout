@@ -8,9 +8,9 @@ livereg_dir="${gpuscout_tmp_dir}/livereg"
 
 ./analysis_register_spilling  "${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}"
 
-./analysis_restrict "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
+  ./analysis_restrict "${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}"
 
-./analysis_vectorized_load "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
+  ./analysis_vectorized_load "${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}"
 
 ./analysis_atomic_instruction "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
 

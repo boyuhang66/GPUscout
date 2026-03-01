@@ -85,11 +85,11 @@ json analysis_register_spilling (
                     );
 
                 if (reg_search_it != live_register_map[krn_name].end()) {
-                    std::cout << "==== INFO :: Total current registers for the AMDGCN ISA instruction: " << reg_search_it->vgp_reg << std::endl;
+                    std::cout << "==== INFO :: Current VGPRs for the AMDGCN ISA instruction: " << reg_search_it->vgp_reg << std::endl;
                     line_result["used_register_count"] = reg_search_it->vgp_reg;
 
                     if (reg_search_it->change_vgpr_from_last > 0) {
-                        std::cout << "Increased register pressure with " << std::abs(reg_search_it->change_vgpr_from_last) << " more registers compared to last AMGGCN ISA instruction" << std::endl;
+                        std::cout << "Increased VGPR pressure with " << std::abs(reg_search_it->change_vgpr_from_last) << " more registers compared to last AMGGCN ISA instruction" << std::endl;
                         line_result["register_pressure_increase"] = std::abs(reg_search_it->change_vgpr_from_last);
                     } else {
                         line_result["register_pressure_increase"] = 0;
