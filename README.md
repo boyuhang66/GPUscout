@@ -53,19 +53,35 @@ Run the GPUscout.sh script, which was installed to the defined install directory
 ./GPUscout -t nvidia -e ../executable/gaussian -c ../executable/cubin-gaussian -a '-q -s 2000'
 ```
 
+Example with explicit kernel/analysis selection:
+```bash
+./GPUscout -t nvidia -e ../executable/gaussian -c ../executable/cubin-gaussian -a '-q -s 2000' \
+  --kernels loop_compact,acceleration_kernel \
+  --analysis warp_divergence,use_shared
+```
+
 The following input arguments and syntax are supported:
 ```bash
-Usage (Nvidia): ../inst-dir/GPUscout [-h] [--dry-run] [--verbose] -t nvidia -e executable [-c cubin_path] [--args]
-  -h | --help : Display this help.
-  --dry_run : performs only dry_run. A --dry_run will only analyse the SASS instructions. --dry_run will neither read warp stalls nor Nsight metrics 
-  -v | --verbose : print more verbose output. 
-  -t | --type : Select the GPU vendor. Possible options: nvidia
-  -e | --executable : Path to the executable (compiled with nvcc).
-  -c | --cubin : (Nvidia) Path to the cubin file (compiled with nvcc, with -cubin). If left empty, the same path as executable and the name cubin-<executable> will be assumed.
-  -a | --args : Arguments for running the binary. e.g. --args="64 2 2 temp_64 power_64 output_64.txt"
-  --sm_count : (Nvidia) Can be used to specify the number of streaming multiprocessors of the current GPU, as this will be used in calculations (default: 16)
-  -j | --json : Save a JSON-formatted version of the output (Needed for the use of GPUscout-GUI)
-  -p | --performance : Use a separate thread for each analysis
+Usage: (Nvidia): ../inst-dir/GPUscout [-h] [--dry-run] [--verbose] -t nvidia -e executable [-c cubin_path] [--args] [--kernels list] [--analysis list]
+    -h | --help : Display this help.
+    --dry_run : performs only dry_run. A --dry_run will only analyse the SASS instructions. --dry_run will neither read warp stalls nor Nsight metrics
+    -v | --verbose : print more verbose output.
+    -t | --type : Select the GPU vendor. Possible options: nvidia
+    -e | --executable : Path to the executable (compiled with nvcc).
+    -c | --cubin :  (Nvidia) Path to the cubin file (compiled with nvcc, with -cubin). If left empty, the same path as executable and the name cubin-<executable> will be assumed.
+    -a | --args : Arguments for running the binary. e.g. --args=\"64 2 2 temp_64 power_64 output_64.txt\"
+    --sm_count :  (Nvidia) Can be used to specify the number of streaming multiprocessors of the current GPU, as this will be used in calculations (default: 16)
+    -j | --json : Save a JSON-formatted version of the output (Needed for the use of GPUscout-GUI)
+    -p | --performance : Use a separate thread for each analysis
+    --kernels : Comma-separated kernel patterns used for Nsight Compute metric collection and kernel filtering in merged analysis output.
+                If omitted, GPUscout automatically discovers kernels from generated SASS (cubin-scoped).
+    --analysis : Comma-separated analysis IDs to run. Valid IDs:
+                 register_spilling,use_restrict,vectorization,global_atomics,
+                 warp_divergence,use_texture,use_shared,datatype_conversion,deadlock_detection
+                 If omitted, all analyses are enabled.
+```
+
+`--kernels` controls Nsight Compute (`ncu`) collection and also filters kernel entries in merged analysis/JSON output. If `--kernels` is omitted, GPUscout auto-discovers kernels from generated SASS (cubin-scoped) and applies that set end-to-end. `--analysis` limits which analyses run; if omitted, all analyses are run. File names and JSON structure remain unchanged.
 ```
 
 This should automatically start analysing the code and printing recommendations on the terminal screen.
