@@ -83,7 +83,21 @@ struct mtc
 // Defines which metrics are stored in the json result TODO
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(mtc,
     ID_7_2_4,
-    ID_10_1_6
+    ID_10_1_6,
+    ID_10_2_14,
+    ID_11_2_5,
+    ID_12_1_0,
+    ID_12_1_1,
+    ID_12_1_3,
+    ID_12_2_5,
+    ID_15_1_9,
+    ID_15_1_13,
+    ID_16_3_3,
+    ID_16_3_5,
+    ID_17_2_7,
+    ID_17_3_1,
+    ID_17_3_4,
+    ID_17_5_10
 )
 
 

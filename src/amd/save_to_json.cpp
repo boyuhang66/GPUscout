@@ -102,7 +102,14 @@ int main(int argc, char **argv) {
     }
     result["register_pressure"] = json_pressure;
 
-
+    // Add metrics
+    std::unordered_map<std::string, mtc> metric_map = parser_metrics(metrics_dir, assembly_file);
+    json json_metrics = {};
+    for (auto [kernel_name, mtc_obj] : metric_map) {
+        //json_metrics[kernel_name] = "test";// total_memory_flow(v_metric, sm_count); // TODO general metrics
+        json_metrics[kernel_name]["misc"] = mtc_obj;
+    }
+    result["metrics"] = json_metrics;
 
     // Copy source files and save their mapping
     // Get source files used in ptx
