@@ -16,6 +16,7 @@ json analysis_vectorized_load(
     for (const auto& [krn_name_1, ld_cnt] : ld_cnt_map)
     {
         json krn_result = {
+            {"total", 0},
             {"occurrences", json::array()}
         };
 
@@ -127,7 +128,8 @@ json analysis_vectorized_load(
                         }
                     }
 
-                    // TODO PC stall and register pressure
+                    // TODO PC stall
+
 
                     if (!line_result.is_null())
                     {
@@ -165,15 +167,15 @@ int main(int argc, char **argv)
     std::string livereg_dir = argv[3];
     std::unordered_map<std::string, std::vector<live_registers>> live_register_map = live_registers_analysis(livereg_dir, assembly);
 
-    int save_as_json = std::strcmp(argv[3], "true") == 0;
-    std::string json_out_dir = argv[4];
+    bool save_as_json = std::strcmp(argv[4], "true") == 0;
+    std::string json_out_dir = argv[5];
 
     json result = analysis_vectorized_load(ld_cnt_map, ld_map, mtc_map, live_register_map);
 
     if (save_as_json)
     {
         std::ofstream json_file;
-        json_file.open(json_out_dir + "/vectorized_load.json");
+        json_file.open(json_out_dir + "/vectorization.json");
         json_file << result.dump(4);
         json_file.close();
     }

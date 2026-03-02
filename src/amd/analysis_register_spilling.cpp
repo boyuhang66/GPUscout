@@ -57,7 +57,8 @@ json analysis_register_spilling (
                     {"line_number", mem_obj.loc.line_num},
                     {"pc_offset", mem_obj.PC_offset},
                     {"instruction", mem_obj.name},
-                    {"vdata_register", mem_obj.reg_num}
+                    {"register", mem_obj.reg_num},
+                    {"operation", mem_obj.type}
                 };
 
                 if (mem_obj.successor == true)
@@ -71,7 +72,8 @@ json analysis_register_spilling (
                     line_result["previous_compute_instruction"] = {
                         {"instruction", mem_obj.fst.name},
                         {"file_name", mem_obj.fst.loc.file_name},
-                        {"line_number", mem_obj.fst.loc.line_num}
+                        {"line_number", mem_obj.fst.loc.line_num}/*,
+                        {"pc_offset", 0} // TODO*/
                     };
                 }
 

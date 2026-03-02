@@ -54,6 +54,7 @@ json analysis_shared_memory(
                                   << " at line number " << gbl_ld_obj.loc.line_num << " of your code" << std::endl;
 
                         line_result = {
+                            {"severity", "INFO"},
                             {"file_name", gbl_ld_obj.loc.file_name},
                             {"line_number", gbl_ld_obj.loc.line_num},
                             {"instruction_type", "global_load"},
@@ -75,6 +76,7 @@ json analysis_shared_memory(
                               << " at line number " << shr_wr_obj.loc.line_num << " of your code" << std::endl;
 
                     line_result = {
+                        {"severity", "INFO"},
                         {"file_name", shr_wr_obj.loc.file_name},
                         {"line_number", shr_wr_obj.loc.line_num},
                         {"instruction_type", "lds_write"},
@@ -140,11 +142,13 @@ json analysis_shared_memory(
                                 }
 
                                 line_result = {
+                                    {"severity", "WARNING"},
                                     {"file_name", gbl_ld_obj.loc.file_name},
                                     {"line_number", gbl_ld_obj.loc.line_num},
                                     {"register", reg_obj.reg_num},
                                     {"global_load_count", reg_obj.ld_count},
                                     {"computation_instruction_count", reg_obj.op_count},
+                                    {"computation_instruction_pc_offsets", 0}, //TODO
                                     {"uses_shared_memory", false},
                                     {"in_for_loop", inside_loop}
                                 };

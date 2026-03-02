@@ -48,12 +48,14 @@ json analysis_restrict(
                 benefit = true;
 
                 line_result = {
+                    {"severity", "INFO"},
+                    {"pc_offset", 0}, // TODO
                     {"file_name", reg_obj.loc.file_name},
                     {"line_number", reg_obj.loc.line_num},
                     {"register", reg_obj.reg_num}
                 };
 
-                /* TODO Restrict analysis currently doesnt include pcOffset
+                /* TODO Restrict analysis currently doesnt include pcOffset which is needed for matching register pressure
                 // --------- Register Pressure ------------------
                 // search for a match between the PC offset of the current local memory instruction and the PC offset of
                 // an entry in the live register map
@@ -110,8 +112,8 @@ int main(int argc, char **argv)
     std::string livereg_dir = argv[3];
     std::unordered_map<std::string, std::vector<live_registers>> live_register_map = live_registers_analysis(livereg_dir, assembly);
 
-    auto save_as_json = std::strcmp(argv[3], "true") == 0;
-    std::string json_out_dir = argv[4];
+    bool save_as_json = std::strcmp(argv[4], "true") == 0;
+    std::string json_out_dir = argv[5];
 
     auto result = analysis_restrict(reg_map, mtc_map, live_register_map);
 

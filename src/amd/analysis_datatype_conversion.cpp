@@ -43,6 +43,7 @@ json analysis_datatype_conversion(
                           << std::endl;
 
                 krn_result["occurrences"].push_back({
+                    {"severity", "WARNING"},
                     {"file_name", std::get<0>(i).file_name},
                     {"line_number", std::get<0>(i).line_num},
                     {"pc_offset", std::get<1>(i)},
@@ -70,6 +71,7 @@ json analysis_datatype_conversion(
                           << std::endl;
 
                 krn_result["occurrences"].push_back({
+                        {"severity", "WARNING"},
                     {"file_name", std::get<0>(i).file_name},
                     {"line_number", std::get<0>(i).line_num},
                     {"pc_offset", std::get<1>(i)},
@@ -97,6 +99,7 @@ json analysis_datatype_conversion(
                           << std::endl;
 
                 krn_result["occurrences"].push_back({
+                        {"severity", "WARNING"},
                     {"file_name", std::get<0>(i).file_name},
                     {"line_number", std::get<0>(i).line_num},
                     {"pc_offset", std::get<1>(i)},

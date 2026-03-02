@@ -65,8 +65,9 @@ json analysis_atomic_instruction(
                 {
                     std::cout << "==== the atomic instruction could be inside a loop" << std::endl;
                 }
-                                
+
                 krn_result["occurrences"].push_back({
+                    {"severity", "INFO"},
                     {"file_name", gbl_atom_obj.loc.file_name},
                     {"line_number", gbl_atom_obj.loc.line_num},
                     {"in_for_loop", inside_loop},
@@ -116,6 +117,7 @@ json analysis_atomic_instruction(
                 }
 
                 krn_result["occurrences"].push_back({
+                        {"severity", "INFO"},
                     {"file_name", shr_atom_obj.loc.file_name},
                     {"line_number", shr_atom_obj.loc.line_num},
                     {"in_for_loop", inside_loop},
@@ -182,7 +184,7 @@ int main(int argc, char **argv)
     if (save_as_json)
     {
         std::ofstream json_file;
-        json_file.open(json_out_dir + "/atomic_instruction.json");
+        json_file.open(json_out_dir + "/global_atomics.json");
         json_file << result.dump(4);
         json_file.close();
     }
