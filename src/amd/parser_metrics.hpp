@@ -207,4 +207,72 @@ std::unordered_map<std::string, mtc> parser_metrics(const std::string &dir, cons
     return mtc_map;
 }
 
+json total_memory_flow(const std::unordered_map<std::string, mtc> &all_metrics/*, int total_SM*/) {
+    // TODO select the to be included metrics for the total memory flow metrics
+    return {
+        {"general", {
+            {"total_instructions", all_metrics}, // TODO update with real metrics
+            //{"l2_queries", total_l2_queries},
+            //{"l2_cache_hit_perc", all_metrics.metrics_list.lts__t_sector_hit_rate},
+            //{"loads_l2_cache_hit_perc", all_metrics.metrics_list.lts__t_sector_op_read_hit_rate},
+            ////{"stores_l2_cache_hit_perc", all_metrics.metrics_list.lts__t_sector_op_write_hit_rate},
+            //{"loads_l2_to_dram_bytes", loads_l2_to_dram_bytes},
+            //{"stores_l2_to_dram_bytes", stores_l2_to_dram_bytes},
+        }},
+        /*
+        {"global", {
+            {"instructions", all_metrics.metrics_list.sm__sass_inst_executed_op_global_ld + all_metrics.metrics_list.sm__sass_inst_executed_op_global_st},
+            {"bytes_per_instruction", global_data_per_instr_bytes},
+
+            {"loads_instructions", all_metrics.metrics_list.sm__sass_inst_executed_op_global_ld},
+            {"loads_to_l1_bytes", 32 * all_metrics.metrics_list.l1tex__t_sectors_pipe_lsu_mem_global_op_ld},
+            {"loads_l1_cache_hit_perc", all_metrics.metrics_list.l1tex__t_sector_pipe_lsu_mem_global_op_ld_hit_rate},
+            {"loads_l1_to_l2_bytes", global_loads_l1_to_l2_bytes},
+
+            {"stores_instructions", all_metrics.metrics_list.sm__sass_inst_executed_op_global_st},
+            {"stores_to_l1_bytes", 32 * all_metrics.metrics_list.l1tex__t_sectors_pipe_lsu_mem_global_op_st},
+            {"stores_l1_cache_hit_perc", all_metrics.metrics_list.l1tex__t_sector_pipe_lsu_mem_global_op_st_hit_rate},
+            {"stores_l1_to_l2_bytes", global_stores_l1_to_l2_bytes},
+
+            {"atomic_to_l1_bytes", global_atomics_to_l1_bytes},
+            {"atomic_l1_cache_hit_perc", global_atomics_l1_cache_hit_perc},
+            {"atomics_l1_to_l2_bytes", global_atomics_l1_to_l2_bytes},
+            {"atomics_l2_cache_hit_perc", global_atomics_l2_cache_hit_perc},
+            {"atomics_l2_to_dram_bytes", global_atomics_l2_to_dram_bytes},
+        }},
+        {"local", {
+            {"instructions", all_metrics.metrics_list.sm__sass_inst_executed_op_local_ld + all_metrics.metrics_list.sm__sass_inst_executed_op_local_st},
+            {"l2_queries_perc", l2_queries_lmem_percent},
+
+            {"loads_instructions", all_metrics.metrics_list.sm__sass_inst_executed_op_local_ld},
+            {"loads_to_l1_bytes", 32 * all_metrics.metrics_list.l1tex__t_sectors_pipe_lsu_mem_local_op_ld},
+            {"loads_l1_cache_hit_perc", all_metrics.metrics_list.l1tex__t_sector_pipe_lsu_mem_local_op_ld_hit_rate},
+            {"loads_l1_to_l2_bytes", local_loads_l1_to_l2_bytes},
+
+            {"stores_instructions", all_metrics.metrics_list.sm__sass_inst_executed_op_local_st},
+            {"stores_to_l1_bytes", 32 * all_metrics.metrics_list.l1tex__t_sectors_pipe_lsu_mem_local_op_st},
+            {"stores_l1_cache_hit_perc", all_metrics.metrics_list.l1tex__t_sector_pipe_lsu_mem_local_op_st_hit_rate},
+            {"stores_l1_to_l2_bytes", local_stores_l1_to_l2_bytes},
+        }},
+        {"shared", {
+            {"instructions", all_metrics.metrics_list.sm__sass_inst_executed_op_shared_ld + all_metrics.metrics_list.sm__sass_inst_executed_op_shared_st},
+
+            {"loads_instructions", all_metrics.metrics_list.sm__sass_inst_executed_op_shared_ld},
+            {"loads_efficiency_perc", all_metrics.metrics_list.smsp__sass_average_data_bytes_per_wavefront_mem_shared_op_ld},
+            {"loads_bank_conflict", shared_bank_conflict},
+
+            {"stores_instructions", all_metrics.metrics_list.sm__sass_inst_executed_op_shared_st},
+            {"ldgsts_instructions", all_metrics.metrics_list.smsp__inst_executed_op_ldgsts}
+        }},
+        {"texture", {
+            {"instructions", all_metrics.metrics_list.sm__sass_inst_executed_op_texture},
+            {"loads_to_l1_bytes", all_metrics.metrics_list.l1tex__t_sectors_pipe_tex_mem_texture},
+            {"loads_l1_cache_hit_perc", all_metrics.metrics_list.l1tex__t_sector_pipe_tex_mem_texture_op_tex_hit_rate},
+            {"loads_l1_to_l2_bytes", texture_loads_l1_to_l2_bytes},
+            {"loads_l2_to_dram_bytes", texture_loads_l2_to_dram_bytes},
+        }}
+        */
+    };
+}
+
 #endif // PARSER_METRICS_HPP
