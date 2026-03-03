@@ -29,6 +29,9 @@ usage() {
       # TODO Check if possible for AMD
     fi
     echo "  -j | --json : Save a JSON-formatted version of the output (Needed for the use of GPUscout-GUI)"
+    if [ "@VENDOR@" = "amd" ] || [ "@VENDOR@" = "all" ]; then
+      echo "  -p | --performance        : (AMD) Use a separate thread for each analysis"
+    fi
     exit 1
 }
 
@@ -36,7 +39,7 @@ usage() {
 if [ "@VENDOR@" = "nvidia" ]; then
   options=$(getopt -o hvt:e:c:a:j -l help,dry_run,verbose,type:,executable:,cubin:,args:,sm_count:,json -- "$@")
 elif [ "@VENDOR@" = "amd" ]; then
-  options=$(getopt -o hvt:e:r:a:j -l help,dry_run,verbose,type:,executable:,rga:,args:,sm_count:,json -- "$@")
+  options=$(getopt -o hvt:e:r:a:jp -l help,dry_run,verbose,type:,executable:,rga:,args:,sm_count:,json,performance -- "$@")
 else
   options=$(getopt -o hvt:e:c:r:a:j -l help,dry_run,verbose,type:,executable:,cubin:,rga:,args:,sm_count:,json -- "$@")
 fi
@@ -48,6 +51,7 @@ fi
 
 eval set -- "$options"
 
+performance_mode=false
 vendor="@VENDOR@"
 dry_run=false
 verbose=false
@@ -94,6 +98,10 @@ while true; do
             ;;
          -j | --json)
             json=true
+            shift
+            ;;
+         -p | --performance)
+            performance_mode=true
             shift
             ;;
          --sm_count)

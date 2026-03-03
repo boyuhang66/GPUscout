@@ -6,21 +6,66 @@ assembly="${gpuscout_tmp_dir}/${executable_filename}.s"
 metrics_dir="${gpuscout_tmp_dir}/metrics"
 livereg_dir="${gpuscout_tmp_dir}/livereg"
 
-./analysis_register_spilling  "${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}"
+if [ "$performance_mode" = false ]; then
+  ./analysis_register_spilling  "${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}"
 
   ./analysis_restrict "${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}"
 
   ./analysis_vectorized_load "${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}"
 
-./analysis_atomic_instruction "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
+  ./analysis_atomic_instruction "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
 
-./analysis_wavefront_divergence "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
+  ./analysis_wavefront_divergence "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
 
-./analysis_shared_memory "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
+  ./analysis_shared_memory "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
 
-./analysis_datatype_conversion "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
+  ./analysis_datatype_conversion "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
 
-./analysis_deadlock_detection "${assembly}" "${json}" "${gpuscout_output_dir}"
+  ./analysis_deadlock_detection "${assembly}" "${json}" "${gpuscout_output_dir}"
+
+else
+  analysis_logs_dir="${gpuscout_tmp_dir}/analysis_tmp_outputs"
+  mkdir -p "$analysis_logs_dir"
+  declare -a names=() pids=()
+
+  all_log="${analysis_logs_dir}/all_analyses.log"
+  : >"$all_log"
+
+  run() {
+    local name="$1"; shift
+    (
+      "$@" # Execute the passed command
+      rc=$? # Captures the exit code
+      exit "$rc"
+    ) >>"$all_log" 2>&1 &
+    pids+=("$!")
+  }
+
+  # Launch all analyses in parallel
+  run register_spilling      ./analysis_register_spilling  "$assembly" "$metrics_dir" "$livereg_dir" "$json" "$gpuscout_output_dir"
+  run restrict               ./analysis_restrict           "$assembly" "$metrics_dir" "$livereg_dir" "$json" "$gpuscout_output_dir"
+  run vectorized_load        ./analysis_vectorized_load    "$assembly" "$metrics_dir" "$livereg_dir" "$json" "$gpuscout_output_dir"
+  run atomic_instruction     ./analysis_atomic_instruction "$assembly" "$metrics_dir" "$json" "$gpuscout_output_dir"
+  run wavefront_divergence   ./analysis_wavefront_divergence "$assembly" "$metrics_dir" "$json" "$gpuscout_output_dir"
+  run shared_memory          ./analysis_shared_memory      "$assembly" "$metrics_dir" "$json" "$gpuscout_output_dir"
+  run datatype_conversion    ./analysis_datatype_conversion "$assembly" "$metrics_dir" "$json" "$gpuscout_output_dir"
+  run deadlock_detection     ./analysis_deadlock_detection "$assembly" "$json" "$gpuscout_output_dir"
+
+  # Wait and collect exit codes
+  declare -a rc=()
+  for i in "${!pids[@]}"; do
+    if wait "${pids[$i]}"; then
+      rc[$i]=0
+    else
+      rc[$i]=$?
+    fi
+  done
+
+  # Print captured outputs after all are done
+  cat "$all_log"
+
+fi
+
 
 # output all used files in JSON format
 if [ "$json" = true ]; then
