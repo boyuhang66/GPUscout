@@ -388,6 +388,39 @@ elif [ "$vendor" = "amd" ]; then
 
         exec 3<&- # release file descriptor 3
         cd .. # go back to previous work directory
+
+
+
+        # Creating file containing PC sampling data when supported by the gpu TODO Could be moved into metrics collection when pc sampling works without problems
+        stochastic_gpus=$(rocprofv3 -L | grep -A 7 "GPU\s*:" | grep  "Method\s*:\s*stochastic")
+        stochastic_gpus="" # TODO remove when rocprof-compute bug is fixed - doesnt collect data right now and data fields are just empty
+        if [ -n "$stochastic_gpus" ]; then
+            echo "==== collecting PC sampling data"
+
+            mkdir pc_samples
+            # Collect pc sampling data with the command from the docs - 128 cycles because nvidia version uses the same amount
+            rocprof-compute profile -n pc_test -b 21 --no-roof --pc-sampling-method stochastic --pc-sampling-interval 128 -VVV -- "$executable" "$args"
+            mv "workloads" "pc_samples/workloads"
+            cd pc_samples
+
+            # Use different file descriptor (3) for the loop because rocprof-compute consumes/reads stdin resulting in only one kernel analyzed
+            exec 3< kernel_list.csv
+            # analyze each kernel separately
+            while IFS=, read -r -u 3 kernel_number kernel_name; do
+                # replace spaces and special characters in kernel_name for the output filename
+                sanitized_kernel_name=$(echo "$kernel_name" | tr -c 'a-zA-Z0-9' '_' | sed 's/^_//;s/_$//')
+                output_file="${executable_filename}_${sanitized_kernel_name}_pc_samples"
+
+                # execute the per-kernel analysis
+                rocprof-compute analyze -p "workloads/$executable_filename/$gpu_name" -b 21 -k "$kernel_number" \
+                --output-name "$output_file" --output-format txt --pc-sampling-sorting-type offset
+            done
+            exec 3<&- # release file descriptor 3
+            cd ..
+        else
+            echo "==== no GPU on this system supports hardware-based (stochastic) PC sampling"
+        fi
+
     fi
 fi
 
