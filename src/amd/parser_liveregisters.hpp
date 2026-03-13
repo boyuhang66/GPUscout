@@ -59,7 +59,7 @@ inline std::regex regex_assembly_instruction() {
         "([^\\s]+)"                               // matches the instruction
         "(.*?)//"                                 // matches any following until // is encountered
         "\\s*"                                    // matches the following whitespaces
-        "(.*?):"                                 // matches any following until : is encountered
+        "(.*?):"                                  // matches any following until : is encountered
         ".*"                                      // matches anything following
     );
 }
@@ -255,7 +255,7 @@ std::unordered_map<std::string, std::vector<live_registers> > live_registers_ana
             std::cout << "Could not open the file" << filename << std::endl;
     }
 
-    // Assembly file part
+    // Assembly file part - Matching kernel lines with general program PCOffsets
     kernel_name = "";
     std::fstream as_file(assembly_filename, std::ios::in);
     std::string as_line; // stores the current line in the assembly file

@@ -22,6 +22,7 @@ if(VENDOR STREQUAL "amd" OR VENDOR STREQUAL "all")
 endif()
 include_directories(src/utilities)
 
+# Configure start script template
 configure_file(GPUscout.sh.in ${CMAKE_CURRENT_BINARY_DIR}/GPUscout.sh @ONLY)
 
 

@@ -17,14 +17,22 @@
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
+// Used for matching the individual metrics line
 std::regex line_pattern(std::string id)
 {
+    /*
+    * ╒═════════════╤════════════════════════╤═══════════╤═══════════╤═══════════╤═══════════════════╕
+    * │ Metric_ID   │ Metric                 │       Avg │       Min │       Max │ Unit              │
+    * ╞═════════════╪════════════════════════╪═══════════╪═══════════╪═══════════╪═══════════════════╡
+    * │ 7.2.4       │ Dependency Wait Cycles │ 672972.00 │ 672972.00 │ 672972.00 │ Cycles per kernel │
+    * ╘═════════════╧════════════════════════╧═══════════╧═══════════╧═══════════╧═══════════════════╛
+    */
     return std::regex(
-        "^│"
-        "\\s*"
-        + id +
-        "\\s*│"
-        "\\s*([\\/\\s\\w\\.\\(\\)\\-]+)\\s*│"
+        "^│"                                     // left border
+        "\\s*"                                      // whitespaces after border
+        + id +                                      // id=7.2.4
+        "\\s*│"                                     // whitespaces after id
+        "\\s*([\\/\\s\\w\\.\\(\\)\\-]+)\\s*│"       // Metric type e.g Dependency Wait Cycles
         "\\s*([\\/\\s\\w\\.\\(\\)\\-]+)\\s*│"
         "(?:\\s*([\\/\\s\\w\\.\\(\\)\\-]+)\\s*│)?"
         "(?:\\s*([\\/\\s\\w\\.\\(\\)\\-]+)\\s*│)?"
@@ -56,7 +64,7 @@ struct mtc
     double ID_17_5_10;
 };
 
-// Defines which metrics are stored in the json result TODO
+// Defines which metrics are stored in the json result
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(mtc,
     ID_7_2_4,
     ID_10_1_6,
@@ -86,7 +94,6 @@ std::unordered_map<std::string, mtc> parser_metrics(const std::string &dir, cons
     std::unordered_map<std::string, mtc> mtc_map;
 
     // Build mangled kernel name lookup table - rocprof-compute cant provide this
-    // Because of this the mangled kernel name is taken out of the object file
     std::unordered_map<std::string, std::string> kernel_names_table = build_kernel_names_table(assembly_filename);
 
      
@@ -112,6 +119,8 @@ std::unordered_map<std::string, mtc> parser_metrics(const std::string &dir, cons
                 if (file.is_open()) 
 		        {
                     std::string line;
+
+                    // Iterate through file
                     while (std::getline(file, line)) 
 		            {
 			            std::smatch line_match;

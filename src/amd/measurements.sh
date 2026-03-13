@@ -24,6 +24,7 @@ if [ "$performance_mode" = false ]; then
   ./analysis_deadlock_detection "${assembly}" "${json}" "${gpuscout_output_dir}"
 
 else
+  # Use Multi-Threading for faster analysis -> each analysis within its own thread
   analysis_logs_dir="${gpuscout_tmp_dir}/analysis_tmp_outputs"
   mkdir -p "$analysis_logs_dir"
   declare -a names=() pids=()

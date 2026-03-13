@@ -131,6 +131,8 @@ json analysis_vectorized_load(
                     // TODO PC stall
 
 
+
+                    // Occurence to the json output
                     if (!line_result.is_null())
                     {
                         krn_result["occurrences"].push_back(line_result);

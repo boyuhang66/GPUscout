@@ -48,7 +48,6 @@ int main(int argc, char **argv) {
     // int sm_count = std::stoi(argv[8]); TODO AMD equivalent?
 
     json result = {
-        //{"kernels", json::object()}, TODO: Doppelt in Nvidia definiert?
         {"vendor", "amd"},
         {"analyses", json::object()},
         {"metrics", json::object()},
@@ -60,7 +59,7 @@ int main(int argc, char **argv) {
         }},
         {"register_pressure", json::object()},
         {"source_files", json::object()},
-        {"kernels", json::object()} //TODO KERNEL in json - Z... und demangled Version. Auch bei Analysen demangled Version verwenden
+        {"kernels", json::object()}
     };
 
     // Add individual analysis results to result file
@@ -90,9 +89,6 @@ int main(int argc, char **argv) {
     }
 
 
-
-
-
     // Add register pressure information - to_json function is used to transfer to json
     std::unordered_map<std::string, std::vector<live_registers>> live_register_map;
     live_register_map = live_registers_analysis(livereg_dir, assembly_file);
@@ -112,7 +108,7 @@ int main(int argc, char **argv) {
     result["metrics"] = json_metrics;
 
     // Copy source files and save their mapping
-    // Get source files used in ptx
+    // Get source files used in assembly file
     std::ifstream assembly_content(assembly_file);
     std::string file_content;
 

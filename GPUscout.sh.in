@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Start script template which launches the analysis for both amd and nvidia
+# CMake configures the @VENDOR@ variable
+
 # Define the usage function
 usage() {
     if [ "@VENDOR@" = "nvidia" ] || [ "@VENDOR@" = "all" ]; then

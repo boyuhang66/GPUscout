@@ -11,6 +11,10 @@
 #include "amdgcn_instructions.hpp"
 #include "../utilities/helper.hpp"
 
+/*
+ * Defines functions used in multiple analyses
+ */
+
 // Used for extracting the kernel name from the rocprof-compute file
 std::regex kernel_name_pattern() {
     /*
