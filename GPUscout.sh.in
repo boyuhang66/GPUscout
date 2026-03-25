@@ -29,7 +29,7 @@ usage() {
     echo "  -a | --args : Arguments for running the binary. e.g. --args=\"64 2 2 temp_64 power_64 output_64.txt\""
     if [ "@VENDOR@" = "nvidia" ] || [ "@VENDOR@" = "all" ]; then
       echo "  --sm_count : (Nvidia) Can be used to specify the number of streaming multiprocessors of the current GPU, as this will be used in calculations (default: 16)"
-      # TODO Check if possible for AMD
+      # TODO Add if wanted for AMD
     fi
     echo "  -j | --json : Save a JSON-formatted version of the output (Needed for the use of GPUscout-GUI)"
     if [ "@VENDOR@" = "amd" ] || [ "@VENDOR@" = "all" ]; then
@@ -152,7 +152,7 @@ esac
 executable_filename=$(basename "$executable")
 executable_dir="$( cd "$( dirname "$executable" )" && pwd )"
 executable="$executable_dir/$executable_filename"
-run_prefix=$executable_filename # TODO Check if needed in AMD version
+run_prefix=$executable_filename
 if [ ! -f "$executable" ]; then
     echo "Executable not found at: $executable"
     exit 1
@@ -176,8 +176,7 @@ if [ "$vendor" = "nvidia" ]; then
 fi
 if [ "$vendor" = "amd" ]; then
     if [ -z "$rga" ]; then
-        # TODO RGA Binary default path
-        rga_filename="rga-todo"
+        rga_filename="rga"
         rga_dir=$executable_dir
     else
         rga_filename=$(basename "$rga")

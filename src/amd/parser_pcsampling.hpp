@@ -82,10 +82,7 @@ struct pc_issue_samples
 /// @return Vector of stall reasons and stall values of the relevant assembly instructions for each kernel
 std::unordered_map<std::string, std::vector<pc_issue_samples>> get_warp_stalls(const std::string &dir, const std::string &assembly_filename)
 {
-    // TODO uncomment the line below and remove the following two lines. Those only act for testing the code right now
-    //std::unordered_map<std::string, std::string> kernel_names_table = build_kernel_names_table(assembly_filename);
-    std::unordered_map<std::string, std::string> kernel_names_table;
-    kernel_names_table.insert({"vectorKernel(float*, float*)","_Z12vectorKernelPfS_"});
+    std::unordered_map<std::string, std::string> kernel_names_table = build_kernel_names_table(assembly_filename);
 
     std::unordered_map<std::string, std::vector<pc_issue_samples>> pc_samples_map;
 

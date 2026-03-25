@@ -90,8 +90,6 @@ int main(int argc, char **argv)
     auto brc_map = std::get<0>(tuple);
     auto tgt_map = std::get<1>(tuple);
 
-    // TODO PC stalls
-
     std::string mtc_dir = argv[2];
     auto mtc_map = parser_metrics(mtc_dir, assembly);
 

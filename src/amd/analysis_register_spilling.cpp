@@ -73,7 +73,7 @@ json analysis_register_spilling (
                         {"instruction", mem_obj.fst.name},
                         {"file_name", mem_obj.fst.loc.file_name},
                         {"line_number", mem_obj.fst.loc.line_num}/*,
-                        {"pc_offset", 0} // TODO*/
+                        {"pc_offset", 0} // TODO pc_offset*/
                     };
                 }
 
