@@ -49,7 +49,7 @@ json analysis_restrict(
 
                 line_result = {
                     {"severity", "INFO"},
-                    {"pc_offset", 0}, // TODO
+                    {"pc_offset", reg_obj.PC_offset},
                     {"file_name", reg_obj.loc.file_name},
                     {"line_number", reg_obj.loc.line_num},
                     {"register", reg_obj.reg_num}

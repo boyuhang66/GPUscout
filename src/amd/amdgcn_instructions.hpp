@@ -7,6 +7,8 @@
 
 #include <regex>
 
+enum class RegexKind { NONE, FLAT, MIMG, MUBUF, MTBUF };
+
 // matches lines containing a command with the demangled kernel name
 // ; vectorAdd(float const*, float const*, float*, int)():
 std::regex regex_krn_name_demangled("^;"

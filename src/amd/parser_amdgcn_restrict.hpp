@@ -26,6 +26,7 @@ struct reg
     std::string reg_num; // register number
     location loc;             // source code line number corresponding to the assembly instruction that uses
                          // this register
+    std::string PC_offset;
 };
 
 /// @brief          detect registers that are only used to load data from global memory
@@ -61,11 +62,23 @@ parser_restrict(const std::string &filename)
                 loc_obj.file_name = match[1].str();
             }
 
+            RegexKind hit = RegexKind::NONE;
+            /*
             if (std::regex_search(line, match, regex_FLAT("(global_load\\w*)")) ||
                 std::regex_search(line, match, regex_MIMG("(image_load\\w*)", "((?!s\\[0:3\\])[\\w\\[\\]:\\-]+)")) ||
                 std::regex_search(line, match, regex_MUBUF("(buffer_load\\w*)", "((?!s\\[0:3\\])[\\w\\[\\]:\\-]+)")) ||
                 std::regex_search(line, match, regex_MTBUF("(tbuffer_load_format\\w*)",
                                                            "((?!s\\[0:3\\])[\\w\\[\\]:\\-]+)")))
+            */
+            if (std::regex_search(line, match, regex_FLAT("(global_load\\w*)"))
+                    ? (hit = RegexKind::FLAT, true)
+                : std::regex_search(line, match, regex_MIMG("(image_load\\w*)", "((?!s\\[0:3\\])[\\w\\[\\]:\\-]+)"))
+                    ? (hit = RegexKind::MIMG, true)
+                : std::regex_search(line, match, regex_MUBUF("(buffer_load\\w*)", "((?!s\\[0:3\\])[\\w\\[\\]:\\-]+)"))
+                    ? (hit = RegexKind::MUBUF, true)
+                : std::regex_search(line, match, regex_MTBUF("(tbuffer_load_format\\w*)", "((?!s\\[0:3\\])[\\w\\[\\]:\\-]+)"))
+                    ? (hit = RegexKind::MTBUF, true)
+                : false)
             {
                 std::string vdst = match[2].str();
 
@@ -82,10 +95,31 @@ parser_restrict(const std::string &filename)
                     reg_obj.reg_num = vdst;
                     reg_obj.loc = loc_obj;
 
+                    // set PCoffset relative to captured instruction type because of different group
+                    // Group in regex - Flat: 5, Mimg: 5, Mubuf: 4, Mtbuf: 4
+                    int pc_index = 0;
+                    switch (hit) {
+                        case RegexKind::FLAT:
+                            pc_index = 6;
+                            break;
+                        case RegexKind::MIMG:
+                            pc_index = 8;
+                            break;
+                        case RegexKind::MUBUF:
+                            pc_index = 7;
+                            break;
+                        case RegexKind::MTBUF:
+                            pc_index = 7;
+                            break;
+                        default: break;
+                    }
+                    reg_obj.PC_offset = match[pc_index].str();
+
                     reg_vec.push_back(reg_obj);
                 }
             }
 
+            // TODO same logic
             if (std::regex_search(line, match, regex_VOP1("((?:v_rcp|v_sqrt|v_rsq|v_sin|v_cos|v_log|v_exp)\\w*)")) ||
                 std::regex_search(line, match, regex_VOP2("((?:v_add|v_mul|v_mad)\\w*)")) ||
                 std::regex_search(line, match, regex_VOP3("((?:v_add|v_mul|v_mad|v_fma|v_div_fma|v_rcp|v_sqrt|v_rsq"
