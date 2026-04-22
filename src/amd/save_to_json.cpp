@@ -132,29 +132,6 @@ int main(int argc, char **argv) {
                 }
                 source_file.close();
             }
-            /*
-            if (line.find("; /") != std::string::npos) {
-                // ; /home/ge64cax2/GPUscout/examples/amd/register_spilling-vec.cpp:10
-                std::istringstream ss(line);
-                std::getline(ss, tmp_string, ' ');
-                std::getline(ss, tmp_string, ':');
-
-                //std::cout << tmp_string << '\n';
-
-                // Skip already added source files
-                if (result["source_files"].find(tmp_string) != result["source_files"].end()) {
-                    continue;
-                }
-
-                std::ifstream source_file(tmp_string);
-                if (source_file.is_open()) {
-                    std::string content((std::istreambuf_iterator<char>(source_file)), (std::istreambuf_iterator<char>()));
-                    result["source_files"][tmp_string] = content;
-                }
-                source_file.close();
-
-            }
-            */
         }
     }
     result["binary_files"]["assembly"] = file_content;

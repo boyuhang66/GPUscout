@@ -195,15 +195,6 @@ gpuscout_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 gpuscout_tmp_dir="${gpuscout_dir}/tmp-gpuscout"
 gpuscout_output_dir="${gpuscout_tmp_dir}/output"
 
-# Save metrics in a separate directory
-echo "======================================================================================================"
-echo "==== Creating GPUscout TMP directory for storing metrics: ${gpuscout_tmp_dir}"
-mkdir -p ${gpuscout_tmp_dir}
-
-if [ "$json" = true ]; then
-    mkdir -p ${gpuscout_output_dir}
-fi
-
 # Note: when you compile the code with nvcc, create 2 executables
 # 1. without -cubin flag: <executable name>
 # 2. with -cubin flag: prefix the name of the executable with cubin-<executable name>
@@ -251,9 +242,19 @@ rm merge_analysis_warp_divergence 2>/dev/null
 rm merge_analysis_use_texture 2>/dev/null
 rm merge_analysis_use_shared 2>/dev/null
 rm merge_analysis_datatype_conversion 2>/dev/null
-# TODO: Used in AMD Version - Actually needed?
-# rm -f "${gpuscout_tmp_dir}"/* 2>/dev/null
-# rm -f "${gpuscout_output_dir}"/* 2>/dev/null
+#  delete temporary files from a previous run TODO: Used in AMD Version - Probably not needed because deleted at the end of run anyway
+rm -rf "${gpuscout_tmp_dir}"/* 2>/dev/null
+rm -rf "${gpuscout_output_dir}"/* 2>/dev/null
+
+# Save metrics in a separate directory
+echo "======================================================================================================"
+echo "==== Creating GPUscout TMP directory for storing metrics: ${gpuscout_tmp_dir}"
+mkdir -p ${gpuscout_tmp_dir}
+
+if [ "$json" = true ]; then
+    mkdir -p ${gpuscout_output_dir}
+fi
+
 
 if [ "$vendor" = "nvidia" ]; then
     echo "Setting up profiling . . . . . . . . . . . . . . . "
@@ -317,11 +318,6 @@ if [ "$vendor" = "nvidia" ]; then
         cp ${gpuscout_dir}/sampling_utilities/sampling_utility/pcsampling_${run_prefix}.txt ${gpuscout_tmp_dir}/pcsampling_${run_prefix}.txt
     fi
 elif [ "$vendor" = "amd" ]; then
-    # delete temporary files from a previous run TODO wichitg?
-    echo "==== clearing previous files"
-    rm -f "${gpuscout_tmp_dir}"/* 2>/dev/null
-    rm -f "${gpuscout_output_dir}"/* 2>/dev/null
-
     cd "${gpuscout_tmp_dir}" || exit
 
     # creating object file
@@ -356,13 +352,10 @@ elif [ "$vendor" = "amd" ]; then
 
     echo "======================================================================================================"
     if [ "$dry_run" = false ]; then
-    #    echo "==== getting PC sampling data"
-        # TODO
-    #    echo "==== TODO"
-
         echo "==== collecting kernel profiling data"
 
         # creating profiling data
+        rm -rf "workloads/$executable_filename" # Clear possible previous workloads folder TODO: Can be uncommented when not debugging
         rocprof-compute profile --name "$executable_filename" --no-roof --quiet -- "$executable" "$args"
 
         mkdir metrics
@@ -443,6 +436,7 @@ source ${gpuscout_dir}/analysis_$vendor/measurements.sh
 # Exit
 echo -e "Profiling complete! Starting cleanup . . . . . . . . . . . . . . . . . . . ."
 
+# TODO: uncomment this line when debugging
 rm -rf ${gpuscout_output_dir}
 
 # Remove the PC sampling files generate before release/production, else keep them for debug
