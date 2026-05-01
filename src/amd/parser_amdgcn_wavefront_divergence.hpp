@@ -22,6 +22,7 @@ struct brc
 {
     std::string tgt; // branch target
     location loc;
+    std::string PC_offset; // PC offset of the branch instruction
 };
 
 /// @brief          assembly analysis, collects conditional branching instructions, and their targets  
@@ -73,6 +74,7 @@ parser_wavefront_divergence(const std::string &filename)
                 
                 brc_obj.tgt = match[2].str();
                 brc_obj.loc = loc_obj;
+                brc_obj.PC_offset = match[match.size() - 2];
 
                 brc_vec.push_back(brc_obj);
             }

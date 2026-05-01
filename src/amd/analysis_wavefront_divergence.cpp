@@ -50,7 +50,7 @@ json analysis_wavefront_divergence(
 
                 line_result = {
                     {"severity", "WARNING"},
-                    {"pc_offset", ""}, //TODO
+                    {"pc_offset", brc_obj.PC_offset},
                    {"file_name", brc_obj.loc.file_name},
                    {"line_number", brc_obj.loc.line_num},
                    {"target_branch", brc_obj.tgt},
@@ -101,7 +101,7 @@ int main(int argc, char **argv)
     if (save_as_json)
     {
         std::ofstream json_file;
-        json_file.open(json_out_dir + "/warp_divergence2.json"); // TODO remove 2 when pc_offset is added
+        json_file.open(json_out_dir + "/warp_divergence.json");
         json_file << result.dump(4);
         json_file.close();
     }
