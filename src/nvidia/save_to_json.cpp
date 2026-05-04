@@ -1,6 +1,6 @@
 #include "parser_metrics.hpp"
 #include "parser_pcsampling.hpp"
-#include "utilities/json.hpp"
+#include "../utilities/json.hpp"
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -45,6 +45,7 @@ int main(int argc, char **argv)
     int sm_count = std::stoi(argv[8]);
 
     json result = {
+        {"vendor", "nvidia"}, // TODO Compile check
         {"kernels", json::object()},
         {"analyses", json::object()},
         {"metrics", json::object()},

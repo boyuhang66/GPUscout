@@ -10,7 +10,7 @@
 #include "parser_sass_use_shared.hpp"
 #include "parser_pcsampling.hpp"
 #include "parser_metrics.hpp"
-#include "utilities/json.hpp"
+#include "../utilities/json.hpp"
 
 using json = nlohmann::json;
 
