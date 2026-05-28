@@ -8,7 +8,7 @@
  */
 
 #include "parser_sass_deadlock_detection.hpp"
-#include "utilities/json.hpp"
+#include "../utilities/json.hpp"
 #include <cstring>
 #include <cstring>
 #include <fstream>

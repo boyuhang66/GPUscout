@@ -10,7 +10,7 @@
 #include "parser_sass_datatype_conversion.hpp"
 #include "parser_pcsampling.hpp"
 #include "parser_metrics.hpp"
-#include "utilities/json.hpp"
+#include "../utilities/json.hpp"
 #include <cstring>
 #include <fstream>
 

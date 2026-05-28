@@ -10,7 +10,7 @@
 #include "parser_sass_use_texture.hpp"
 #include "parser_pcsampling.hpp"
 #include "parser_metrics.hpp"
-#include "utilities/json.hpp"
+#include "../utilities/json.hpp"
 
 using json = nlohmann::json;
 
@@ -164,7 +164,7 @@ json merge_analysis_use_texture(std::unordered_map<std::string, std::vector<regi
 
         if (!texture_recommend_flag)
         {
-            std::cout << "INFO  ::  No global loads found in the kernel which can benifit from using Texture memory" << std::endl;
+            std::cout << "INFO  ::  No global loads found in the kernel which can benefit from using Texture memory" << std::endl;
         }
 
         // Map kernel with metrics collected
