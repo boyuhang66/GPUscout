@@ -65,6 +65,7 @@ Usage (Nvidia): ../inst-dir/GPUscout [-h] [--dry-run] [--verbose] -t nvidia -e e
   -a | --args : Arguments for running the binary. e.g. --args="64 2 2 temp_64 power_64 output_64.txt"
   --sm_count : (Nvidia) Can be used to specify the number of streaming multiprocessors of the current GPU, as this will be used in calculations (default: 16)
   -j | --json : Save a JSON-formatted version of the output (Needed for the use of GPUscout-GUI)
+  -p | --performance : Use a separate thread for each analysis
 ```
 
 This should automatically start analysing the code and printing recommendations on the terminal screen.
@@ -95,6 +96,7 @@ Usage (AMD): ./GPUscout [-h] [--dry-run] [--verbose] -t amd -e executable [-r rg
   -r | --rga        : (AMD) Path to the RGA (https://gpuopen.com/rga/) binary. E.g. /home/user/downloads/rga-2.11.0.28/rga).
   -a | --args : Arguments for running the binary. e.g. --args="64 2 2 temp_64 power_64 output_64.txt"
   -j | --json : Save a JSON-formatted version of the output (Needed for the use of GPUscout-GUI)
+  -p | --performance : Use a separate thread for each analysis
 ```
 
 This should automatically start analysing the code and printing recommendations on the terminal screen.

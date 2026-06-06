@@ -32,19 +32,17 @@ usage() {
       # TODO Add if wanted for AMD
     fi
     echo "  -j | --json : Save a JSON-formatted version of the output (Needed for the use of GPUscout-GUI)"
-    if [ "@VENDOR@" = "amd" ] || [ "@VENDOR@" = "all" ]; then
-      echo "  -p | --performance        : (AMD) Use a separate thread for each analysis"
-    fi
+    echo "  -p | --performance : Use a separate thread for each analysis"
     exit 1
 }
 
 # Parse command-line options
 if [ "@VENDOR@" = "nvidia" ]; then
-  options=$(getopt -o hvt:e:c:a:j -l help,dry_run,verbose,type:,executable:,cubin:,args:,sm_count:,json -- "$@")
+  options=$(getopt -o hvt:e:c:a:jp -l help,dry_run,verbose,type:,executable:,cubin:,args:,sm_count:,json,performance -- "$@")
 elif [ "@VENDOR@" = "amd" ]; then
   options=$(getopt -o hvt:e:r:a:jp -l help,dry_run,verbose,type:,executable:,rga:,args:,sm_count:,json,performance -- "$@")
 else
-  options=$(getopt -o hvt:e:c:r:a:j -l help,dry_run,verbose,type:,executable:,cubin:,rga:,args:,sm_count:,json -- "$@")
+  options=$(getopt -o hvt:e:c:r:a:jp -l help,dry_run,verbose,type:,executable:,cubin:,rga:,args:,sm_count:,json,performance -- "$@")
 fi
 
 if [ $? -ne 0 ]; then
@@ -210,6 +208,7 @@ echo "==== Arguments for the executable file: \"$args\""
 echo "==== Dry-run: $dry_run"
 echo "==== Verbose: $verbose"
 echo "==== JSON Output: $json"
+echo "==== Performance Mode (Multi-threading): $performance_mode"
 echo "======================================================================================================"
 
 
