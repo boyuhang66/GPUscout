@@ -62,12 +62,12 @@ Example with explicit kernel/analysis selection:
 
 Example with automatic hotspot-kernel selection via Nsight Systems (top 10 by default):
 ```bash
-./GPUscout -e ../executable/gaussian -a '-q -s 2000' --nsys-hotspot-kernels
+./GPUscout -t nvidia -e ../executable/gaussian -a '-q -s 2000' --nsys-hotspot-kernels
 ```
 
 Example with explicit hotspot count:
 ```bash
-./GPUscout -e ../executable/gaussian -a '-q -s 2000' --nsys-hotspot-kernels 15
+./GPUscout -t nvidia -e ../executable/gaussian -a '-q -s 2000' --nsys-hotspot-kernels 15
 ```
 
 The following input arguments and syntax are supported:
