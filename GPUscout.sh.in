@@ -406,7 +406,7 @@ discover_nsys_hotspot_kernels() {
     echo "Nsight hotspot kernels selected: ${kernels_arg}"
 }
 
-# Evaluate custom kernel constraints if explicit profiling sets are passed via CLI.
+# Evaluate custom kernel constraints if explicit profiling sets are passed via CLI or if kernels were discovered via Nsight hotspot kernel discovery.
 if [ -n "${kernels_arg}" ]; then
     validate_csv_list_syntax "${kernels_arg}" "kernels" # validate the syntax of the comma-separated list
     # validate_csv_list_characters "${kernels_arg}" "kernels" # validate that the kernel patterns only contain valid characters
@@ -553,9 +553,7 @@ rm merge_analysis_warp_divergence 2>/dev/null
 rm merge_analysis_use_texture 2>/dev/null
 rm merge_analysis_use_shared 2>/dev/null
 rm merge_analysis_datatype_conversion 2>/dev/null
-if [ "$vendor" = "nvidia" ]; then
-    rm merge_analysis_deadlock_detection 2>/dev/null
-fi
+rm merge_analysis_deadlock_detection 2>/dev/null
 #  delete temporary files from a previous run TODO: Used in AMD Version - Probably not needed because deleted at the end of run anyway
 rm -rf "${gpuscout_tmp_dir}"/* 2>/dev/null
 rm -rf "${gpuscout_output_dir}"/* 2>/dev/null
