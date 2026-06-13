@@ -31,3 +31,7 @@ configure_file(GPUscout.sh.in ${CMAKE_CURRENT_BINARY_DIR}/GPUscout.sh @ONLY)
 #link_libraries(CUDA::toolkit)
 
 install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/GPUscout.sh DESTINATION . RENAME GPUscout)
+if (VENDOR STREQUAL "nvidia" OR VENDOR STREQUAL "all")
+    install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/src/nvidia/nsys_report_to_hotspot_kernels.py DESTINATION ./analysis_nvidia)
+endif()
+

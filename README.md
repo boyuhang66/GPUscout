@@ -60,9 +60,19 @@ Example with explicit kernel/analysis selection:
   --analysis warp_divergence,use_shared
 ```
 
+Example with automatic hotspot-kernel selection via Nsight Systems (top 10 by default):
+```bash
+./GPUscout -e ../executable/gaussian -a '-q -s 2000' --nsys-hotspot-kernels
+```
+
+Example with explicit hotspot count:
+```bash
+./GPUscout -e ../executable/gaussian -a '-q -s 2000' --nsys-hotspot-kernels 15
+```
+
 The following input arguments and syntax are supported:
 ```bash
-Usage: (Nvidia): ../inst-dir/GPUscout [-h] [--dry-run] [--verbose] -t nvidia -e executable [-c cubin_path] [--args] [--kernels list] [--analysis list]
+Usage: (Nvidia): ../inst-dir/GPUscout [-h] [--dry_run] [--verbose] -t nvidia -e executable [-c cubin_path] [--args] [--kernels list] [--analysis list] [--nsys-hotspot-kernels [num]]
     -h | --help : Display this help.
     --dry_run : performs only dry_run. A --dry_run will only analyse the SASS instructions. --dry_run will neither read warp stalls nor Nsight metrics
     -v | --verbose : print more verbose output.
@@ -79,10 +89,11 @@ Usage: (Nvidia): ../inst-dir/GPUscout [-h] [--dry-run] [--verbose] -t nvidia -e 
                  register_spilling,use_restrict,vectorization,global_atomics,
                  warp_divergence,use_texture,use_shared,datatype_conversion,deadlock_detection
                  If omitted, all analyses are enabled.
+    --nsys-hotspot-kernels [num] : Run Nsight Systems, parse hotspot kernels, and use top kernels for profiling.
+                                   Default num is 10 when not specified. Cannot be used with --kernels.
 ```
 
-`--kernels` controls Nsight Compute (`ncu`) collection and also filters kernel entries in merged analysis/JSON output. If `--kernels` is omitted, GPUscout auto-discovers kernels from generated SASS (cubin-scoped) and applies that set end-to-end. `--analysis` limits which analyses run; if omitted, all analyses are run. File names and JSON structure remain unchanged.
-```
+`--kernels` controls Nsight Compute (`ncu`) collection and also filters kernel entries in merged analysis/JSON output. If `--kernels` is omitted, GPUscout auto-discovers kernels from generated SASS (cubin-scoped) and applies that set end-to-end. `--nsys-hotspot-kernels` can be used instead of `--kernels` to auto-select top runtime hotspots from Nsight Systems output. `--analysis` limits which analyses run; if omitted, all analyses are run. File names and JSON structure remain unchanged.
 
 This should automatically start analysing the code and printing recommendations on the terminal screen.
 
@@ -103,7 +114,7 @@ Run the GPUscout.sh script, which was installed to the defined install directory
 
 The following input arguments and syntax are supported:
 ```bash
-Usage (AMD): ./GPUscout [-h] [--dry-run] [--verbose] -t amd -e executable [-r rga_path] [-a] [-j]
+Usage (AMD): ./GPUscout [-h] [--dry_run] [--verbose] -t amd -e executable [-r rga_path] [-a] [-j]
   -h | --help : Display this help.
   --dry_run : performs only dry_run. A --dry_run will only analyse the SASS instructions. --dry_run will neither read warp stalls nor Nsight metrics 
   -v | --verbose : print more verbose output. 
