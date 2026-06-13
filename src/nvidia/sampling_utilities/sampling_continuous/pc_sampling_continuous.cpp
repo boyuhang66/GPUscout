@@ -94,7 +94,7 @@ using namespace CUPTI::PcSamplingUtil;
             fprintf(stderr,                                                         \
                     "%s:%d: error: function %s failed with error %s.\n"             \
                     "This might be a permission issue with Performance Counters.\n" \
-                    "For more infomation and troubleshooting: https://developer.nvidia.com/nvidia-development-tools-solutions-err_nvgpuctrperm-permission-issue-performance-counters\n" \
+                    "For more infomation and troubleshooting: https://developer.nvidia.com/nvidia-development-tools-solutions-err_nvgpuctrperm-permission-issue-performance-counters\n", \
                     __FILE__, __LINE__, #call, errstr);                             \
         } else {                                                                    \
             fprintf(stderr, "%s:%d: error: function %s failed with error %s.\n",    \
