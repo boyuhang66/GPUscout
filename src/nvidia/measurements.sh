@@ -208,18 +208,6 @@ else
     enabled_analyses=("${parsed_csv_list[@]}")
 fi
 
-invalid_analyses=()
-for analysis in "${enabled_analyses[@]}"; do
-    if ! is_valid_analysis "${analysis}"; then
-        invalid_analyses+=("${analysis}")
-    fi
-done
-
-if [ "${#invalid_analyses[@]}" -gt 0 ]; then
-    echo "ERROR: Invalid analysis name(s): $(join_by_comma "${invalid_analyses[@]}")"
-    echo "Valid values: $(join_by_comma "${valid_analyses[@]}")"
-    exit 1
-fi
 
 ncu_collection_kernels=("${top_kernels[@]}")
 ncu_kernel_base_args=(--kernel-name-base demangled)
