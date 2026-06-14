@@ -15,23 +15,13 @@ parse_csv_list () {
 
     parsed_csv_list=()
 
-    normalized=$(printf '%s' "${raw}" | sed -E 's/[[:space:]]*,[[:space:]]*/,/g')
-    normalized="$(trim_whitespace "${normalized}")"
-
-    if [ -z "${normalized}" ] || [[ "${normalized}" == ,* ]] || [[ "${normalized}" == *, ]] || [[ "${normalized}" == *",,"* ]]; then
-        echo "ERROR: Malformed --${option_name} list: \"${raw}\""
-        echo "Expected comma-separated non-empty values, e.g. a,b,c"
-        exit 1
-    fi
+    validate_csv_list_syntax "${raw}" "${option_name}"
+    normalized="$(normalize_csv_list "${raw}")"
 
     IFS=',' read -r -a token_list <<< "${normalized}"
 
     for token in "${token_list[@]}"; do
         trimmed="$(trim_whitespace "${token}")"
-        if [ -z "${trimmed}" ]; then
-            echo "ERROR: Empty token found in --${option_name} list: \"${raw}\""
-            exit 1
-        fi
         if ! array_contains "${trimmed}" "${parsed_csv_list[@]}"; then
             parsed_csv_list+=("${trimmed}")
         fi
