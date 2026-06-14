@@ -5,24 +5,6 @@
 
 echo "======================================================================================================"
 
-valid_analyses=(
-    register_spilling
-    use_restrict
-    vectorization
-    global_atomics
-    warp_divergence
-    use_texture
-    use_shared
-    datatype_conversion
-    deadlock_detection
-)
-
-trim_whitespace () {
-    local value="$1"
-    value="${value#"${value%%[![:space:]]*}"}"
-    value="${value%"${value##*[![:space:]]}"}"
-    printf '%s' "${value}"
-}
 
 # Parse a comma-separated list, validate list syntax, trim tokens, and deduplicate.
 parse_csv_list () {
@@ -54,23 +36,6 @@ parse_csv_list () {
             parsed_csv_list+=("${trimmed}")
         fi
     done
-}
-
-# Utility function to join array elements with a comma for display
-join_by_comma () {
-    local IFS=','
-    printf '%s' "$*"
-}
-
-is_valid_analysis () {
-    local candidate="$1"
-    local allowed
-    for allowed in "${valid_analyses[@]}"; do
-        if [ "${candidate}" = "${allowed}" ]; then
-            return 0
-        fi
-    done
-    return 1
 }
 
 # Check if an array contains a value
@@ -421,22 +386,38 @@ _metrics_json_export=(
             smsp__warp_issue_stalled_tex_throttle_per_warp_active.pct
         )
 
+# for analysis in "${enabled_analyses[@]}"; do
+#     case "$analysis" in
+#         register_spilling)   _add_metrics "${_metrics_register_spilling[@]}" ;;
+#         use_restrict)        _add_metrics "${_metrics_use_restrict[@]}" ;;
+#         vectorization)       _add_metrics "${_metrics_vectorization[@]}" ;;
+#         global_atomics)      _add_metrics "${_metrics_global_atomics[@]}" ;;
+#         warp_divergence)     _add_metrics "${_metrics_warp_divergence[@]}" ;;
+#         use_texture)         _add_metrics "${_metrics_use_texture[@]}" ;;
+#         use_shared)          _add_metrics "${_metrics_use_shared[@]}" ;;
+#         datatype_conversion) _add_metrics "${_metrics_datatype_conversion[@]}" ;;
+#         deadlock_detection)  : ;;
+#         *)
+#             echo "ERROR: Unknown analysis name in enabled_analyses: $analysis"
+#             exit 1
+#             ;;
+#     esac
+# done
+# Refactor the above to avoid code duplication and allow easier addition of new analyses in the future.
 for analysis in "${enabled_analyses[@]}"; do
-    case "$analysis" in
-        register_spilling)   _add_metrics "${_metrics_register_spilling[@]}" ;;
-        use_restrict)        _add_metrics "${_metrics_use_restrict[@]}" ;;
-        vectorization)       _add_metrics "${_metrics_vectorization[@]}" ;;
-        global_atomics)      _add_metrics "${_metrics_global_atomics[@]}" ;;
-        warp_divergence)     _add_metrics "${_metrics_warp_divergence[@]}" ;;
-        use_texture)         _add_metrics "${_metrics_use_texture[@]}" ;;
-        use_shared)          _add_metrics "${_metrics_use_shared[@]}" ;;
-        datatype_conversion) _add_metrics "${_metrics_datatype_conversion[@]}" ;;
-        deadlock_detection)  : ;;
-        *)
+    if [ "${analysis}" = "deadlock_detection" ]; then
+        continue
+    fi
+
+    if ! array_contains "${analysis}" "${valid_analyses[@]}"; then
             echo "ERROR: Unknown analysis name in enabled_analyses: $analysis"
             exit 1
-            ;;
-    esac
+    fi
+
+    array_name="_metrics_${analysis}"
+    declare -n current_metrics="${array_name}"
+
+    _add_metrics "${current_metrics[@]}"
 done
 
 if [ "$json" = true ]; then

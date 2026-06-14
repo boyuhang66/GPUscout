@@ -111,6 +111,17 @@ sms=16
 kernels_arg=""
 analysis_arg=""
 nsys_hotspot_kernels_count="${pre_nsys_hotspot_kernels_count}"
+valid_analyses=(
+    register_spilling
+    use_restrict
+    vectorization
+    global_atomics
+    warp_divergence
+    use_texture
+    use_shared
+    datatype_conversion
+    deadlock_detection
+)
 while true; do
     case "$1" in
         -h | --help)
@@ -205,45 +216,16 @@ validate_csv_list_syntax() {
     fi
 }
 
-# validate_csv_list_characters() {
-#     local raw="$1"
-#     local option_name="$2"
-#     local normalized token trimmed
-#     local token_list=()
-#     local invalid=()
+# join array elements with a comma for display
+join_by_comma () {
+    local IFS=','
+    printf '%s' "$*"
+}
 
-#     normalized="$(normalize_csv_list "${raw}")"
-#     IFS=',' read -r -a token_list <<< "${normalized}" # split the normalized string into an array using comma as a delimiter
-
-#     for token in "${token_list[@]}"; do
-#         trimmed="$(trim_whitespace "${token}")"
-#         if [[ ! "${trimmed}" =~ ^[a-zA-Z0-9_]+$ ]]; then
-#             invalid+=("${trimmed}")
-#         fi
-#     done
-
-#     if [ "${#invalid[@]}" -gt 0 ]; then
-#         local IFS=,
-#         echo "ERROR: Invalid characters in --${option_name} list: ${invalid[*]}"
-#         echo "Only alphanumeric characters and underscores [a-zA-Z0-9_] are allowed."
-#         exit 1
-#     fi
-# }
-
-is_valid_analysis_name() { # check if the given analysis name is in the list of allowed analyses
+is_valid_analysis() { # check if the given analysis name is in the list of allowed analyses
     local candidate="$1"
     local allowed
-    for allowed in \
-        register_spilling \
-        use_restrict \
-        vectorization \
-        global_atomics \
-        warp_divergence \
-        use_texture \
-        use_shared \
-        datatype_conversion \
-        deadlock_detection
-    do
+    for allowed in "${valid_analyses[@]}"; do
         if [ "${candidate}" = "${allowed}" ]; then
             return 0
         fi
@@ -262,15 +244,15 @@ validate_analysis_values() {
 
     for token in "${token_list[@]}"; do
         trimmed="$(trim_whitespace "${token}")"
-        if ! is_valid_analysis_name "${trimmed}"; then
+        if ! is_valid_analysis "${trimmed}"; then
             invalid+=("${trimmed}")
         fi
     done
 
     if [ "${#invalid[@]}" -gt 0 ]; then
         local IFS=,
-        echo "ERROR: Invalid analysis name(s): ${invalid[*]}"
-        echo "Valid values: register_spilling,use_restrict,vectorization,global_atomics,warp_divergence,use_texture,use_shared,datatype_conversion,deadlock_detection"
+        echo "ERROR: Invalid analysis name(s): $(join_by_comma "${invalid[@]}")"
+        echo "Valid values: $(join_by_comma "${valid_analyses[@]}")"
         exit 1
     fi
 }
