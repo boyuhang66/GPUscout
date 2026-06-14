@@ -473,131 +473,129 @@ metrics="${gpuscout_tmp_dir}/${run_prefix}_metrics_list"
 reg_exe="${gpuscout_tmp_dir}/nvdisasm-registers-executable-${executable_filename}-sass.txt"
 reg_hpc="${gpuscout_tmp_dir}/nvdisasm-registers-hpctoolkit-${executable_filename}-sass.txt"
 
+args_register_spilling=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_exe" "$json" "$gpuscout_output_dir" "$sms" "${kernel_filter_csv}")
+args_use_restrict=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_hpc" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
+args_vectorization=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_hpc" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
+args_global_atomics=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
+args_warp_divergence=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
+args_use_texture=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
+args_use_shared=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
+args_datatype_conversion=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
+args_deadlock_detection=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
+
 start_analysis=$(date +%s.%N)
 
 if [ "$performance_mode" = false ]; then
     # Time a command (wall clock) and print duration.
     # Usage: timed_run "<label>" <command> [args...]
+   
+    # Run only the analyses selected in `enabled_analyses` above.
+    # for analysis in "${enabled_analyses[@]}"; do
+    #     case "$analysis" in
+    #         register_spilling)
+    #             echo "======================================================================================================"
+    #             echo "Combining above results for register spilling analysis . . . . . . . . . . . . . . . "
+    #             # Run only the analyses selected in `enabled_analyses` above.
+    #             #g++ -std=c++17 ../merge_analysis_register_spilling.cpp -o merge_analysis_register_spilling
+    #             # nvcc --generate-line-info merge_analysis_register_spilling.cpp -o merge_analysis_register_spilling -lcuda -l:libcufilt.a
+    #             timed_run "register spilling analysis" ./merge_analysis_register_spilling "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${reg_exe}" "${json}" "${gpuscout_output_dir}" "${sms}" "${kernel_filter_csv}"
+    #             ;;
+    #         use_restrict)
+    #             echo "======================================================================================================"
+    #             echo "Combining above results for using __restrict__ analysis . . . . . . . . . . . . . . . "
+    #             #g++ -std=c++17 ../merge_analysis_use_restrict.cpp -o merge_analysis_use_restrict
+    #             timed_run "using __restrict__ analysis" ./merge_analysis_use_restrict "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${reg_hpc}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
+    #             ;;
+    #         vectorization)
+    #             echo "======================================================================================================"
+    #             echo "Combining above results for vectorization analysis . . . . . . . . . . . . . . . "
+    #             #g++ -std=c++17 ../merge_analysis_vectorization.cpp -o merge_analysis_vectorization
+    #             timed_run "vectorization analysis" ./merge_analysis_vectorization "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${reg_hpc}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
+    #             ;;
+    #         global_atomics)
+    #             echo "======================================================================================================"
+    #             echo "Combining above results for global atomics analysis . . . . . . . . . . . . . . . "
+    #             #g++ -std=c++17 ../merge_analysis_global_atomics.cpp -o merge_analysis_global_atomics
+    #             timed_run "global atomics analysis" ./merge_analysis_global_atomics "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
+    #             ;;
+    #         warp_divergence)
+    #             echo "======================================================================================================"
+    #             echo "Combining above results for warp divergence analysis . . . . . . . . . . . . . . . "
+    #             #g++ -std=c++17 ../merge_analysis_warp_divergence.cpp -o merge_analysis_warp_divergence
+    #             timed_run "warp divergence analysis" ./merge_analysis_warp_divergence "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
+    #             ;;
+    #         use_texture)
+    #             echo "Combining above results for using texture memory analysis . . . . . . . . . . . . . . . "
+    #             #g++ -std=c++17 ../merge_analysis_use_texture.cpp -o merge_analysis_use_texture
+    #             timed_run "use texture memory analysis" ./merge_analysis_use_texture "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
+    #             ;;
+    #         use_shared)
+    #             echo "======================================================================================================"
+    #             echo "Combining above results for using shared memory analysis . . . . . . . . . . . . . . . "
+    #             #g++ -std=c++17 ../merge_analysis_use_shared.cpp -o merge_analysis_use_shared
+    #             timed_run "use shared memory analysis" ./merge_analysis_use_shared "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
+    #             ;;
+    #         datatype_conversion)
+    #             echo "======================================================================================================"
+    #             echo "Combining above results for datatype conversion analysis . . . . . . . . . . . . . . . "
+    #             #g++ -std=c++17 ../merge_analysis_datatype_conversion.cpp -o merge_analysis_datatype_conversion
+    #             timed_run "datatype conversion analysis" ./merge_analysis_datatype_conversion "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
+    #             ;;
+    #         deadlock_detection)
+    #             echo "======================================================================================================"
+    #             echo "Combining above results for deadlock detection . . . . . . . . . . . . . . . "
+    #             #g++ -std=c++17 ../merge_analysis_deadlock_detection.cpp -o merge_analysis_deadlock_detection
+    #             timed_run "deadlock detection" ./merge_analysis_deadlock_detection "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
+    #             ;;
+    #         *)
+    #             echo "ERROR: Unknown analysis name in enabled_analyses (merge stage): $analysis"
+    #             exit 1
+    #             ;;
+    #     esac
+    # done
+
+    ## Refactor the above to avoid code duplication and allow easier addition of new analyses in the future.
     timed_run () {
         local label="$1"
         shift
+        
+        echo "======================================================================================================"
+        if [[ "$label" == "use_restrict" ]]; then
+                local readable_label="using __restrict__"
+        elif [[ "$label" == "use_texture" ]]; then
+            local readable_label="using texture memory"
+        elif [[ "$label" == "use_shared" ]]; then
+            local readable_label="using shared memory"
+        else
+            local readable_label=$(echo "$label" | tr '_' ' ')
+        fi
+        echo "Combining above results for ${readable_label} analysis . . . . . . . . . . . . . . . "
         local t0 t1 dt
         t0=$(date +%s.%N)
         "$@"
         t1=$(date +%s.%N)
         dt=$(awk "BEGIN {print $t1 - $t0}")
-        echo "Time for ${label}: ${dt}s"
+        echo "Time for ${readable_label}: ${dt}s"
     }
     # Run only the analyses selected in `enabled_analyses` above.
     for analysis in "${enabled_analyses[@]}"; do
-        case "$analysis" in
-            register_spilling)
-                echo "======================================================================================================"
-                echo "Combining above results for register spilling analysis . . . . . . . . . . . . . . . "
-                # Run only the analyses selected in `enabled_analyses` above.
-                #g++ -std=c++17 ../merge_analysis_register_spilling.cpp -o merge_analysis_register_spilling
-                # nvcc --generate-line-info merge_analysis_register_spilling.cpp -o merge_analysis_register_spilling -lcuda -l:libcufilt.a
-                timed_run "register spilling analysis" ./merge_analysis_register_spilling "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${reg_exe}" "${json}" "${gpuscout_output_dir}" "${sms}" "${kernel_filter_csv}"
-                ;;
-            use_restrict)
-                echo "======================================================================================================"
-                echo "Combining above results for using __restrict__ analysis . . . . . . . . . . . . . . . "
-                #g++ -std=c++17 ../merge_analysis_use_restrict.cpp -o merge_analysis_use_restrict
-                timed_run "using __restrict__ analysis" ./merge_analysis_use_restrict "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${reg_hpc}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
-                ;;
-            vectorization)
-                echo "======================================================================================================"
-                echo "Combining above results for vectorization analysis . . . . . . . . . . . . . . . "
-                #g++ -std=c++17 ../merge_analysis_vectorization.cpp -o merge_analysis_vectorization
-                timed_run "vectorization analysis" ./merge_analysis_vectorization "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${reg_hpc}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
-                ;;
-            global_atomics)
-                echo "======================================================================================================"
-                echo "Combining above results for global atomics analysis . . . . . . . . . . . . . . . "
-                #g++ -std=c++17 ../merge_analysis_global_atomics.cpp -o merge_analysis_global_atomics
-                timed_run "global atomics analysis" ./merge_analysis_global_atomics "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
-                ;;
-            warp_divergence)
-                echo "======================================================================================================"
-                echo "Combining above results for warp divergence analysis . . . . . . . . . . . . . . . "
-                #g++ -std=c++17 ../merge_analysis_warp_divergence.cpp -o merge_analysis_warp_divergence
-                timed_run "warp divergence analysis" ./merge_analysis_warp_divergence "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
-                ;;
-            use_texture)
-                echo "Combining above results for using texture memory analysis . . . . . . . . . . . . . . . "
-                #g++ -std=c++17 ../merge_analysis_use_texture.cpp -o merge_analysis_use_texture
-                timed_run "use texture memory analysis" ./merge_analysis_use_texture "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
-                ;;
-            use_shared)
-                echo "======================================================================================================"
-                echo "Combining above results for using shared memory analysis . . . . . . . . . . . . . . . "
-                #g++ -std=c++17 ../merge_analysis_use_shared.cpp -o merge_analysis_use_shared
-                timed_run "use shared memory analysis" ./merge_analysis_use_shared "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
-                ;;
-            datatype_conversion)
-                echo "======================================================================================================"
-                echo "Combining above results for datatype conversion analysis . . . . . . . . . . . . . . . "
-                #g++ -std=c++17 ../merge_analysis_datatype_conversion.cpp -o merge_analysis_datatype_conversion
-                timed_run "datatype conversion analysis" ./merge_analysis_datatype_conversion "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
-                ;;
-            deadlock_detection)
-                echo "======================================================================================================"
-                echo "Combining above results for deadlock detection . . . . . . . . . . . . . . . "
-                #g++ -std=c++17 ../merge_analysis_deadlock_detection.cpp -o merge_analysis_deadlock_detection
-                timed_run "deadlock detection" ./merge_analysis_deadlock_detection "${hpc_sass}" "${exe_sass}" "${exe_ptx}" "${sampling}" "${metrics}" "${json}" "${gpuscout_output_dir}" "${kernel_filter_csv}"
-                ;;
-            *)
-                echo "ERROR: Unknown analysis name in enabled_analyses (merge stage): $analysis"
+        binary="./merge_analysis_${analysis}"
+        if [ ! -x "${binary}" ]; then
+            echo "ERROR:  Unknown analysis name in enabled_analyses (merge stage): $analysis"
                 exit 1
-                ;;
-        esac
+        fi
+        array_name="args_${analysis}"
+        declare -n current_args="$array_name"
+
+        timed_run "${analysis}" "${binary}" "${current_args[@]}"
     done
-    # for analysis in "${enabled_analyses[@]}"; do
-    #     echo "======================================================================================================"
-        
-    #     # register_spilling -> register spilling
-    #     local readable_label=$(echo "$analysis" | tr '_' ' ')
-    #     echo "Combining above results for ${readable_label} analysis . . . . . . . . . . . . . . . "
-
-    #     local binary="./merge_analysis_${analysis}"
-    #     local array_name="args_${analysis}"
-    #     local -n current_args="$array_name"
-
-    #     timed_run "${readable_label} analysis" "${binary}" "${current_args[@]}"
-    # done
 else
     # Use Multi-Threading for faster analysis -> each analysis within its own thread
     analysis_logs_dir="${gpuscout_tmp_dir}/analysis_tmp_outputs"
     mkdir -p "$analysis_logs_dir"
     declare -a names=() pids=()
 
-    # run() {
-    #     local name="$1"; shift
-    #     names+=("$name")
-
-    #     # Create a private log file for this analysis
-    #     local private_log="${analysis_logs_dir}/${name}.log"
-    #     : >"$private_log"
-
-    #     (
-    #         echo "======================================================================================================"
-    #         echo "Combining results for $name analysis . . . . . . . . . . . . . . . "
-            
-    #         local t0 t1 dt
-    #         t0=$(date +%s.%N) 
-
-    #         "$@" # Execute the passed command
-    #         rc=$? # Captures the exit code
-
-    #         t1=$(date +%s.%N) 
-    #         dt=$(awk "BEGIN {print $t1 - $t0}") 
-
-    #         echo "Time for ${name} analysis: ${dt}s" 
-    #         exit "$rc"
-    #     ) >"$private_log" 2>&1 & # Run in background and redirect output to private log
-    #     pids+=("$!")
-    # }
-    run() {
+    timed_run() {
         local name="$1"; shift
         names+=("$name")
 
@@ -607,8 +605,16 @@ else
 
         (
             echo "======================================================================================================"
+            if [[ "$name" == "use_restrict" ]]; then
+                local readable_label="using __restrict__"
+            elif [[ "$name" == "use_texture" ]]; then
+                local readable_label="using texture memory"
+            elif [[ "$name" == "use_shared" ]]; then
+                local readable_label="using shared memory"
+            else
             local readable_label=$(echo "$name" | tr '_' ' ')
-            echo "Combining results for ${readable_label} analysis . . . . . . . . . . . . . . . "
+            fi
+            echo "Combining above results for ${readable_label} analysis . . . . . . . . . . . . . . . "
             
             local t0 t1 dt
             t0=$(date +%s.%N)
@@ -625,16 +631,6 @@ else
         pids+=("$!")
     }
 
-    args_register_spilling=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_exe" "$json" "$gpuscout_output_dir" "$sms" "${kernel_filter_csv}")
-    args_use_restrict=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_hpc" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-    args_vectorization=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_hpc" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-    args_global_atomics=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-    args_warp_divergence=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-    args_use_texture=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-    args_use_shared=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-    args_datatype_conversion=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-    args_deadlock_detection=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-
     echo "Launching NVIDIA SASS static analyses in parallel..."
 
     # run register_spilling   ./merge_analysis_register_spilling   "$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_exe" "$json" "$gpuscout_output_dir" "$sms"
@@ -648,11 +644,15 @@ else
     # run deadlock_detection  ./merge_analysis_deadlock_detection  "$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir"
     # Launch all analyses in parallel
     for analysis in "${enabled_analyses[@]}"; do
-        local binary="./merge_analysis_${analysis}"
-        local array_name="args_${analysis}"
-        local -n current_args="$array_name"
+        binary="./merge_analysis_${analysis}"
+        if [ ! -x "${binary}" ]; then
+            echo "ERROR:  Unknown analysis name in enabled_analyses (merge stage): $analysis"
+            exit 1
+        fi
+        array_name="args_${analysis}"
+        declare -n current_args="$array_name"
 
-        run "${analysis}" "${binary}" "${current_args[@]}"
+        timed_run "${analysis}" "${binary}" "${current_args[@]}"
     done
 
     # Wait for all analyses to complete and capture their exit codes
@@ -693,7 +693,7 @@ if [ "$dry_run" = false ]; then
     echo "Time for PC Sampling:          ${pcsampling_time}s"
     echo "Time for Metrics Collection:   ${metrics_time}s"
 fi
-echo "Time for Merging Analysis:             ${analysis_time}s"
+echo "Time for Merging Analysis:     ${analysis_time}s"
 echo "======================================================================================================"
 
 cd ..
