@@ -122,82 +122,85 @@ extract_kernels_from_generated_sass () {
 
 # Extract a readable kernel base name from a mangled symbol.
 # Example: _ZN5cuZFP11cudaDecode1IxEEv... -> cudaDecode1
-extract_kernel_base_name_from_symbol () {
-    local symbol="$1"
-    local rest component_len component base_name=""
-    local fallback="${symbol}"
+# extract_kernel_base_name_from_symbol () {
+#     local symbol="$1"
+#     local rest component_len component base_name=""
+#     local fallback="${symbol}"
 
-    fallback="${fallback%%(*}"
-    fallback="${fallback##*::}"
-    fallback="${fallback%%<*}"
-    fallback="$(trim_whitespace "${fallback}")"
+#     fallback="${fallback%%(*}"
+#     fallback="${fallback##*::}"
+#     fallback="${fallback%%<*}"
+#     fallback="$(trim_whitespace "${fallback}")"
 
-    if [[ "${symbol}" == _ZN* ]]; then
-        rest="${symbol#_ZN}"
-    elif [[ "${symbol}" == _Z* ]]; then
-        rest="${symbol#_Z}"
-    else
-        if [ -n "${fallback}" ]; then
-            printf '%s' "${fallback}"
-        else
-            printf '%s' "${symbol}"
-        fi
-        return
-    fi
+#     if [[ "${symbol}" == _ZN* ]]; then
+#         rest="${symbol#_ZN}"
+#     elif [[ "${symbol}" == _Z* ]]; then
+#         rest="${symbol#_Z}"
+#     else
+#         if [ -n "${fallback}" ]; then
+#             printf '%s' "${fallback}"
+#         else
+#             printf '%s' "${symbol}"
+#         fi
+#         return
+#     fi
 
-    while [[ "${rest}" =~ ^([0-9]+) ]]; do
-        component_len="${BASH_REMATCH[1]}"
-        rest="${rest#${component_len}}"
+#     while [[ "${rest}" =~ ^([0-9]+) ]]; do
+#         component_len="${BASH_REMATCH[1]}"
+#         rest="${rest#${component_len}}"
 
-        if [ "${#rest}" -lt "${component_len}" ]; then
-            break
-        fi
+#         if [ "${#rest}" -lt "${component_len}" ]; then
+#             break
+#         fi
 
-        component="${rest:0:${component_len}}"
-        rest="${rest:${component_len}}"
-        base_name="${component}"
-    done
+#         component="${rest:0:${component_len}}"
+#         rest="${rest:${component_len}}"
+#         base_name="${component}"
+#     done
 
-    if [ -n "${base_name}" ]; then
-        printf '%s' "${base_name}"
-    elif [ -n "${fallback}" ]; then
-        printf '%s' "${fallback}"
-    else
-        printf '%s' "${symbol}"
-    fi
-}
+#     if [ -n "${base_name}" ]; then
+#         printf '%s' "${base_name}"
+#     elif [ -n "${fallback}" ]; then
+#         printf '%s' "${fallback}"
+#     else
+#         printf '%s' "${symbol}"
+#     fi
+# }
 
 # Build de-duplicated NCU kernel patterns for auto mode from mangled symbols.
-build_auto_ncu_kernel_patterns () {
-    local kernel base_name
+# build_auto_ncu_kernel_patterns () {
+#     local kernel base_name
 
-    auto_ncu_kernel_patterns=()
+#     auto_ncu_kernel_patterns=()
 
-    for kernel in "${top_kernels[@]}"; do
-        base_name="$(extract_kernel_base_name_from_symbol "${kernel}")"
-        base_name="$(trim_whitespace "${base_name}")"
-        if [ -z "${base_name}" ]; then
-            continue
-        fi
-        if ! array_contains "${base_name}" "${auto_ncu_kernel_patterns[@]}"; then
-            auto_ncu_kernel_patterns+=("${base_name}")
-        fi
-    done
+#     for kernel in "${top_kernels[@]}"; do
+#         base_name="$(extract_kernel_base_name_from_symbol "${kernel}")"
+#         base_name="$(trim_whitespace "${base_name}")"
+#         if [ -z "${base_name}" ]; then
+#             continue
+#         fi
+#         if ! array_contains "${base_name}" "${auto_ncu_kernel_patterns[@]}"; then
+#             auto_ncu_kernel_patterns+=("${base_name}")
+#         fi
+#     done
 
-    if [ "${#auto_ncu_kernel_patterns[@]}" -eq 0 ]; then
-        auto_ncu_kernel_patterns=("${top_kernels[@]}")
-    fi
-}
+#     if [ "${#auto_ncu_kernel_patterns[@]}" -eq 0 ]; then
+#         auto_ncu_kernel_patterns=("${top_kernels[@]}")
+#     fi
+# }
 
 kernels_selection_mode="user"
+ncu_kernel_base_args=()
 if [ -z "${kernels_arg:-}" ]; then
     extract_kernels_from_generated_sass "${gpuscout_tmp_dir}/nvdisasm-executable-${run_prefix}-sass.txt"
     top_kernels=("${extracted_cubin_kernels[@]}")
-    build_auto_ncu_kernel_patterns
-    top_kernels=("${auto_ncu_kernel_patterns[@]}")
+    # build_auto_ncu_kernel_patterns 
+    # top_kernels=("${auto_ncu_kernel_patterns[@]}")
+    ncu_kernel_base_args=(--kernel-name-base mangled)
     kernels_selection_mode="auto_from_generated_sass"
 else
     parse_csv_list "${kernels_arg}" "kernels"
+    ncu_kernel_base_args=(--kernel-name-base function)
     top_kernels=("${parsed_csv_list[@]}")
 fi
 
@@ -210,7 +213,6 @@ fi
 
 
 ncu_collection_kernels=("${top_kernels[@]}")
-ncu_kernel_base_args=(--kernel-name-base demangled)
 
 echo "Selected kernels for NCU collection: $(join_by_comma "${ncu_collection_kernels[@]}")"
 echo "Selected analyses: $(join_by_comma "${enabled_analyses[@]}")"
@@ -388,8 +390,8 @@ for analysis in "${enabled_analyses[@]}"; do
     fi
 
     if ! array_contains "${analysis}" "${valid_analyses[@]}"; then
-            echo "ERROR: Unknown analysis name in enabled_analyses: $analysis"
-            exit 1
+        echo "ERROR: Unknown analysis name in enabled_analyses: $analysis"
+        exit 1
     fi
 
     array_name="_metrics_${analysis}"
@@ -428,10 +430,14 @@ if [ "$dry_run" = false ]; then
             # launch_count=1 to run only one instance of the kernel and get per-kernel metrics 
             ncu -f --csv --log-file "${tmp_csv}" --print-units base --print-kernel-base mangled \
                 "${ncu_kernel_base_args[@]}" \
-                --kernel-name "${kernel}" -s 5 --launch-count 1 \ 
+                --kernel-name "${kernel}" \
                 --metrics "${metrics_csv}" \
                 ${executable} ${args}
-   
+            # ncu -f --csv --log-file "${tmp_csv}" --print-units base --print-kernel-base mangled \
+            #     "${ncu_kernel_base_args[@]}" \
+            #     --kernel-name "${kernel}" -s 5 --launch-count 1 \
+            #     --metrics "${metrics_csv}" \
+            #     ${executable} ${args}
             append_ncu_csv_rows "${tmp_csv}" "${metrics_out}"
         done
 
@@ -570,7 +576,7 @@ if [ "$performance_mode" = false ]; then
         binary="./merge_analysis_${analysis}"
         if [ ! -x "${binary}" ]; then
             echo "ERROR:  Unknown analysis name in enabled_analyses (merge stage): $analysis"
-                exit 1
+            exit 1
         fi
         array_name="args_${analysis}"
         declare -n current_args="$array_name"
@@ -600,7 +606,7 @@ else
             elif [[ "$name" == "use_shared" ]]; then
                 local readable_label="using shared memory"
             else
-            local readable_label=$(echo "$name" | tr '_' ' ')
+                local readable_label=$(echo "$name" | tr '_' ' ')
             fi
             echo "Combining above results for ${readable_label} analysis . . . . . . . . . . . . . . . "
             
