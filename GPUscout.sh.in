@@ -188,6 +188,7 @@ while true; do
     esac
 done
 
+###### Utility functions for validating and normalizing comma-separated lists (used for --kernels and --analysis arguments)######
 trim_whitespace() { # remove leading and trailing whitespace
     local value="$1"
     value="${value#"${value%%[![:space:]]*}"}"
@@ -195,10 +196,10 @@ trim_whitespace() { # remove leading and trailing whitespace
     printf '%s' "${value}"
 }
 
-normalize_csv_list() {
+normalize_csv_list() { # “kernel1, kernel2 ,kernel3” -> “kernel1,kernel2,kernel3”
     local raw="$1"
     local normalized
-    normalized=$(printf '%s' "${raw}" | sed -E 's/[[:space:]]*,[[:space:]]*/,/g') # “kernel1, kernel2 ,kernel3” -> “kernel1,kernel2,kernel3”
+    normalized=$(printf '%s' "${raw}" | sed -E 's/[[:space:]]*,[[:space:]]*/,/g')
     trim_whitespace "${normalized}" 
 }
 
@@ -257,7 +258,7 @@ validate_analysis_values() {
     fi
 }
 
-# Utility function to check if a value is a positive integer (used for validating the --nsys-hotspot-kernels argument)
+###### Utility function to check if a value is a positive integer (used for validating the --nsys-hotspot-kernels argument) ######
 is_positive_integer() {
     [[ "$1" =~ ^[1-9][0-9]*$ ]]
 }
@@ -391,13 +392,13 @@ discover_nsys_hotspot_kernels() {
 # Evaluate custom kernel constraints if explicit profiling sets are passed via CLI or if kernels were discovered via Nsight hotspot kernel discovery.
 if [ -n "${kernels_arg}" ]; then
     validate_csv_list_syntax "${kernels_arg}" "kernels" # validate the syntax of the comma-separated list
-    # validate_csv_list_characters "${kernels_arg}" "kernels" # validate that the kernel patterns only contain valid characters
 fi
 # Evaluate custom analysis constraints if explicit analysis sets are passed via CLI.
 if [ -n "${analysis_arg}" ]; then
     validate_csv_list_syntax "${analysis_arg}" "analysis" # validate the syntax of the comma-separated list
     validate_analysis_values "${analysis_arg}" # validate the values of the analysis list
 fi
+# Evaluate the validity of the --nsys-hotspot-kernels argument and its compatibility with the --kernels argument
 if [ -n "${nsys_hotspot_kernels_count}" ]; then
     if ! is_positive_integer "${nsys_hotspot_kernels_count}"; then
         echo "ERROR: --nsys-hotspot-kernels expects a positive integer, got: ${nsys_hotspot_kernels_count}"
