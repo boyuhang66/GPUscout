@@ -337,11 +337,11 @@ discover_nsys_hotspot_kernels() {
 
     #### Issues encountered with nsys version: 2022.4.2.50-32196742v0, cuda Toolkit: 12.0
     ### Handle potential broken internal nsys importer which fails to convert .qdstrm to .nsys-rep
-    ### Triggering a manual conversion using QdstrmImporter.
-    if [ ! -f "${profile_prefix}.nsys-rep" ]; then
-        echo "Detected broken internal nsys importer. Triggering manual conversion..."
-        /usr/lib/nsight-systems/host-linux-x64/QdstrmImporter -i "${profile_prefix}.qdstrm"
-    fi
+    ### Triggering a manual conversion using QdstrmImporter. [FALLBACK]
+    # if [ ! -f "${profile_prefix}.nsys-rep" ]; then
+    #     echo "Detected broken internal nsys importer. Triggering manual conversion..."
+    #     /usr/lib/nsight-systems/host-linux-x64/QdstrmImporter -i "${profile_prefix}.qdstrm"
+    # fi
 
     if [ -f "${profile_prefix}.nsys-rep" ]; then
         rep_file="${profile_prefix}.nsys-rep"
@@ -354,22 +354,22 @@ discover_nsys_hotspot_kernels() {
 
     local start_nsys_stats end_nsys_stats nsys_stats_time
     start_nsys_stats="$(python3 -c 'import time; print(time.time())')"
-    # if ! nsys stats --report cuda_gpu_kern_sum --output "${stats_prefix}" --format csv "${rep_file}"; then
-    #     echo "ERROR: Failed to generate Nsight Systems kernel CSV report (cuda_gpu_kern_sum)."
-    #     exit 1
-    # fi
-
-    ### Handle potential differences in nsys versions: newer versions use "cuda_gpu_kern_sum" as the report name for kernel summaries, while older versions use "gpukernsum".
-    if [ ! -f "${stats_prefix}_cuda_gpu_kern_sum.csv" ]; then
-        echo "[GPUscout Rescue] 'cuda_gpu_kern_sum.csv' was NOT physically generated. Falling back to legacy 'gpukernsum'..."
-        
-        nsys stats --report gpukernsum --output "${stats_prefix}" --format csv "${rep_file}"
-        
-        if [ ! -f "${stats_prefix}_gpukernsum.csv" ]; then
-            echo "ERROR: Failed to physically generate Nsight Systems kernel CSV report with any known format."
-            exit 1
-        fi
+    if ! nsys stats --report cuda_gpu_kern_sum --output "${stats_prefix}" --format csv "${rep_file}"; then
+        echo "ERROR: Failed to generate Nsight Systems kernel CSV report (cuda_gpu_kern_sum)."
+        exit 1
     fi
+
+    ### Handle potential differences in nsys versions: newer versions use "cuda_gpu_kern_sum" as the report name for kernel summaries, while older versions use "gpukernsum". [FALLBACK]
+    # if [ ! -f "${stats_prefix}_cuda_gpu_kern_sum.csv" ]; then
+    #     echo "[GPUscout Rescue] 'cuda_gpu_kern_sum.csv' was NOT physically generated. Falling back to legacy 'gpukernsum'..."
+        
+    #     nsys stats --report gpukernsum --output "${stats_prefix}" --format csv "${rep_file}"
+        
+    #     if [ ! -f "${stats_prefix}_gpukernsum.csv" ]; then
+    #         echo "ERROR: Failed to physically generate Nsight Systems kernel CSV report with any known format."
+    #         exit 1
+    #     fi
+    # fi
     end_nsys_stats="$(python3 -c 'import time; print(time.time())')"
     nsys_stats_time=$(awk "BEGIN {print ${end_nsys_stats} - ${start_nsys_stats}}")
     echo "Nsight Systems stats time: ${nsys_stats_time}s"
