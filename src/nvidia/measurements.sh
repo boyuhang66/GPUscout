@@ -418,7 +418,7 @@ if [ "$dry_run" = false ]; then
         start_metrics=$(date +%s.%N)
         metrics_out="${run_prefix}_metrics_list"
 
-        echo "NCU mode: one launch per selected kernel (skip=5)"
+        echo "NCU mode: one launch per selected kernel"
 
         rm -f "${metrics_out}"
 
@@ -431,6 +431,7 @@ if [ "$dry_run" = false ]; then
             ncu -f --csv --log-file "${tmp_csv}" --print-units base --print-kernel-base mangled \
                 "${ncu_kernel_base_args[@]}" \
                 --kernel-name "${kernel}" \
+                --launch-count 1 \
                 --metrics "${metrics_csv}" \
                 ${executable} ${args}
             # ncu -f --csv --log-file "${tmp_csv}" --print-units base --print-kernel-base mangled \
