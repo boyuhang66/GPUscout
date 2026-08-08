@@ -146,9 +146,11 @@ json merge_analysis_register_spill(std::unordered_map<std::string, std::vector<l
                 std::cout << "For register spilling, check Long Scoreboard stalls: " << v_metric.metrics_list.smsp__warp_issue_stalled_long_scoreboard_per_warp_active << " % per warp active" << std::endl;
                 std::cout << "For register spilling, check LG Throttle stalls: " << v_metric.metrics_list.smsp__warp_issue_stalled_lg_throttle_per_warp_active << " % per warp active" << std::endl;
                 auto local_load_store = v_metric.metrics_list.smsp__inst_executed_op_local_ld + v_metric.metrics_list.smsp__inst_executed_op_local_st;
-                auto estimated_l2_queries_lmem_allSM = 2 * 4 * total_SM * ((1 - (v_metric.metrics_list.l1tex__t_sector_hit_rate / 100)) * local_load_store);
-                auto total_l2_queries = v_metric.metrics_list.lts__t_sectors_op_read + v_metric.metrics_list.lts__t_sectors_op_write + v_metric.metrics_list.lts__t_sectors_op_atom + v_metric.metrics_list.lts__t_sectors_op_red;
-                auto l2_queries_lmem_percent = estimated_l2_queries_lmem_allSM / total_l2_queries;
+                auto local_load_l1_missed_sectors =  v_metric.metrics_list.l1tex__t_sectors_pipe_lsu_mem_local_op_ld * (1 - (v_metric.metrics_list.l1tex__t_sector_pipe_lsu_mem_local_op_ld_hit_rate / 100.0));
+                auto local_store_l1_missed_sectors =  v_metric.metrics_list.l1tex__t_sectors_pipe_lsu_mem_local_op_st * (1 - (v_metric.metrics_list.l1tex__t_sector_pipe_lsu_mem_local_op_st_hit_rate / 100.0));
+                auto total_l2_queries = v_metric.metrics_list.lts__t_sectors_op_read + v_metric.metrics_list.lts__t_sectors_op_write + 2 * v_metric.metrics_list.lts__t_sectors_op_atom + 2 * v_metric.metrics_list.lts__t_sectors_op_red;
+                auto estimated_l2_queries_lmem_allSM = local_load_l1_missed_sectors + local_store_l1_missed_sectors;
+                auto l2_queries_lmem_percent = 100.0f * estimated_l2_queries_lmem_allSM / total_l2_queries;
                 std::cout << estimated_l2_queries_lmem_allSM << " - " << total_l2_queries << std::endl;
                 std::cout << "Percentage of total L2 queries due to LMEM: " << l2_queries_lmem_percent << " %" << std::endl;
                 std::cout << "WARNING   ::  If the above percentage is high, it means the memory traffic between the SMs and L2 cache is mostly due to LMEM (need to contain register spills)" << std::endl;

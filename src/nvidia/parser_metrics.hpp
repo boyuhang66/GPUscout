@@ -585,9 +585,11 @@ json total_memory_flow(const kernel_metrics &all_metrics, int total_SM)
     auto global_data_per_instr_bytes = (32 * (all_metrics.metrics_list.l1tex__t_sectors_pipe_lsu_mem_global_op_st + all_metrics.metrics_list.l1tex__t_sectors_pipe_lsu_mem_global_op_ld)) / all_metrics.metrics_list.smsp__sass_inst_executed;
 
     auto local_load_store = all_metrics.metrics_list.smsp__inst_executed_op_local_ld + all_metrics.metrics_list.smsp__inst_executed_op_local_st;
-    auto estimated_l2_queries_lmem_allSM = 2 * 4 * total_SM * ((1 - (all_metrics.metrics_list.l1tex__t_sector_hit_rate / 100)) * local_load_store);
-    auto total_l2_queries = all_metrics.metrics_list.lts__t_sectors_op_read + all_metrics.metrics_list.lts__t_sectors_op_write + all_metrics.metrics_list.lts__t_sectors_op_atom + all_metrics.metrics_list.lts__t_sectors_op_red;
-    auto l2_queries_lmem_percent = estimated_l2_queries_lmem_allSM / total_l2_queries;
+    auto local_load_l1_missed_sectors =  all_metrics.metrics_list.l1tex__t_sectors_pipe_lsu_mem_local_op_ld * (1 - ( all_metrics.metrics_list.l1tex__t_sector_pipe_lsu_mem_local_op_ld_hit_rate / 100.0));
+    auto local_store_l1_missed_sectors =  all_metrics.metrics_list.l1tex__t_sectors_pipe_lsu_mem_local_op_st * (1 - (all_metrics.metrics_list.l1tex__t_sector_pipe_lsu_mem_local_op_st_hit_rate / 100.0));
+    auto total_l2_queries = all_metrics.metrics_list.lts__t_sectors_op_read + all_metrics.metrics_list.lts__t_sectors_op_write + 2 * all_metrics.metrics_list.lts__t_sectors_op_atom + 2 * all_metrics.metrics_list.lts__t_sectors_op_red;
+    auto estimated_l2_queries_lmem_allSM = local_load_l1_missed_sectors + local_store_l1_missed_sectors;
+    auto l2_queries_lmem_percent = 100 * estimated_l2_queries_lmem_allSM / total_l2_queries;
 
     return {
         {"general", {
