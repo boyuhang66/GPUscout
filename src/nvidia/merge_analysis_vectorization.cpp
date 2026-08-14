@@ -94,7 +94,7 @@ json merge_analysis_vectorize(std::unordered_map<std::string, load_counter> vect
                         {
                             std::cout << "INFO  ::  Register " << index_sass.base << ", in line number " << index_sass.line_number << " of your code, is already using 64-bit width vectorized load" << std::endl;
                         }
-                        if (index_sass.reg_load_type == VEC_128)
+                        else if (index_sass.reg_load_type == VEC_128)
                         {
                             std::cout << "INFO  ::  Register " << index_sass.base << ", in line number " << index_sass.line_number << " of your code, is already using 128-bit width vectorized load" << std::endl;
                         }
