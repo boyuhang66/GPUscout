@@ -145,12 +145,25 @@ json merge_analysis_register_spill(std::unordered_map<std::string, std::vector<l
                 // copied register_spilling_analysis from stalls_static_analysis_relation() method
                 std::cout << "For register spilling, check Long Scoreboard stalls: " << v_metric.metrics_list.smsp__warp_issue_stalled_long_scoreboard_per_warp_active << " % per warp active" << std::endl;
                 std::cout << "For register spilling, check LG Throttle stalls: " << v_metric.metrics_list.smsp__warp_issue_stalled_lg_throttle_per_warp_active << " % per warp active" << std::endl;
-                auto local_load_store = v_metric.metrics_list.smsp__inst_executed_op_local_ld + v_metric.metrics_list.smsp__inst_executed_op_local_st;
+                // Comment out the following code as it is not correct to multiply by 2*4*total_SM to get the estimated L2 queries for local memory. 
+                // auto local_load_store = all_metrics.metrics_list.smsp__inst_executed_op_local_ld + all_metrics.metrics_list.smsp__inst_executed_op_local_st;
+                // auto estimated_l2_queries_lmem_allSM = 2 * 4 * total_SM * ((1 - (all_metrics.metrics_list.l1tex__t_sector_hit_rate / 100)) * local_load_store);
+                // auto total_l2_queries = all_metrics.metrics_list.lts__t_sectors_op_read + all_metrics.metrics_list.lts__t_sectors_op_write + all_metrics.metrics_list.lts__t_sectors_op_atom + all_metrics.metrics_list.lts__t_sectors_op_red;
+                // auto l2_queries_lmem_percent = estimated_l2_queries_lmem_allSM / total_l2_queries;
+
+                // The suggested way is to estimate the L1-missed sectors for local-memory loads and stores and then compute the percentage of total L2 queries due to LMEM.
+                // Estimate the corresponding L1-missed sectors for local-memory loads.
                 auto local_load_l1_missed_sectors =  v_metric.metrics_list.l1tex__t_sectors_pipe_lsu_mem_local_op_ld * (1 - (v_metric.metrics_list.l1tex__t_sector_pipe_lsu_mem_local_op_ld_hit_rate / 100.0));
+                // Estimate the corresponding L1-missed sectors for local-memory stores.
                 auto local_store_l1_missed_sectors =  v_metric.metrics_list.l1tex__t_sectors_pipe_lsu_mem_local_op_st * (1 - (v_metric.metrics_list.l1tex__t_sector_pipe_lsu_mem_local_op_st_hit_rate / 100.0));
+                // Total L2 sector queries are computed as the sum of read and write sector queries. According to the Nsight Compute Nvprof Transition Guide: https://archive.docs.nvidia.com/nsight-compute/2022.1/NsightComputeCli/index.html#nvprof-guide
+                // total read  = read  + atom + red
+                // total write = write + atom + red
+                // Hence atomic and reduction sectors contribute to both sides and are counted twice.
                 auto total_l2_queries = v_metric.metrics_list.lts__t_sectors_op_read + v_metric.metrics_list.lts__t_sectors_op_write + 2 * v_metric.metrics_list.lts__t_sectors_op_atom + 2 * v_metric.metrics_list.lts__t_sectors_op_red;
+                // Approximate the share of total L2 read/write sector traffic caused by local-memory accesses that miss in L1.
                 auto estimated_l2_queries_lmem_allSM = local_load_l1_missed_sectors + local_store_l1_missed_sectors;
-                auto l2_queries_lmem_percent = 100.0f * estimated_l2_queries_lmem_allSM / total_l2_queries;
+                auto l2_queries_lmem_percent = 100.0f * estimated_l2_queries_lmem_allSM / total_l2_queries; // multiply by 100 to get percentage
                 std::cout << estimated_l2_queries_lmem_allSM << " - " << total_l2_queries << std::endl;
                 std::cout << "Percentage of total L2 queries due to LMEM: " << l2_queries_lmem_percent << " %" << std::endl;
                 std::cout << "WARNING   ::  If the above percentage is high, it means the memory traffic between the SMs and L2 cache is mostly due to LMEM (need to contain register spills)" << std::endl;
