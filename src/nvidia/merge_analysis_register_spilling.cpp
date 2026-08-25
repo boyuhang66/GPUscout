@@ -145,13 +145,8 @@ json merge_analysis_register_spill(std::unordered_map<std::string, std::vector<l
                 // copied register_spilling_analysis from stalls_static_analysis_relation() method
                 std::cout << "For register spilling, check Long Scoreboard stalls: " << v_metric.metrics_list.smsp__warp_issue_stalled_long_scoreboard_per_warp_active << " % per warp active" << std::endl;
                 std::cout << "For register spilling, check LG Throttle stalls: " << v_metric.metrics_list.smsp__warp_issue_stalled_lg_throttle_per_warp_active << " % per warp active" << std::endl;
-                // Comment out the following code as it is not correct to multiply by 2*4*total_SM to get the estimated L2 queries for local memory. 
-                // auto local_load_store = all_metrics.metrics_list.smsp__inst_executed_op_local_ld + all_metrics.metrics_list.smsp__inst_executed_op_local_st;
-                // auto estimated_l2_queries_lmem_allSM = 2 * 4 * total_SM * ((1 - (all_metrics.metrics_list.l1tex__t_sector_hit_rate / 100)) * local_load_store);
-                // auto total_l2_queries = all_metrics.metrics_list.lts__t_sectors_op_read + all_metrics.metrics_list.lts__t_sectors_op_write + all_metrics.metrics_list.lts__t_sectors_op_atom + all_metrics.metrics_list.lts__t_sectors_op_red;
-                // auto l2_queries_lmem_percent = estimated_l2_queries_lmem_allSM / total_l2_queries;
-
-                // The suggested way is to estimate the L1-missed sectors for local-memory loads and stores and then compute the percentage of total L2 queries due to LMEM.
+               
+                // The suggested way is to estimate the L1-missed sectors to L2 for local-memory loads and stores and then compute the percentage of total L2 queries due to LMEM.
                 // Estimate the corresponding L1-missed sectors for local-memory loads.
                 auto local_load_l1_missed_sectors =  v_metric.metrics_list.l1tex__t_sectors_pipe_lsu_mem_local_op_ld * (1 - (v_metric.metrics_list.l1tex__t_sector_pipe_lsu_mem_local_op_ld_hit_rate / 100.0));
                 // Estimate the corresponding L1-missed sectors for local-memory stores.
