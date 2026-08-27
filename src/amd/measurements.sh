@@ -34,11 +34,11 @@ _metrics_register_spilling=(
     16.3.5  # VL1D cache line hit rate
     17.3.1  # Total incoming requests to L2 cache per kernel
 )
-_metrics_use_restrict=()
-_metrics_vectorization=(
+_metrics_restrict=()
+_metrics_vectorized_load=(
     7.2.4  # Wavefront dependency wait cycles per kernel
 )
-_metrics_global_atomics=(
+_metrics_atomic_instruction=(
     7.2.4   # Wavefront dependency wait cycles per kernel
     12.2.5  # LDS atomic return cycles per cycles
     16.3.3  # VL1D Cache Atomic Requests per kernel
@@ -46,11 +46,11 @@ _metrics_global_atomics=(
     17.3.4  # L2 Cache Atomic Requests per kernel
     17.5.10 # Atomic requests towards Infinity Fabric per kernel
 )
-_metrics_warp_divergence=(
+_metrics_wavefront_divergence=(
     10.1.6  # Branch instruction count per kernel
     11.2.5  # Branch unit utilization percentage
 )
-_metrics_use_shared=(
+_metrics_shared_memory=(
     7.2.4   # Wavefront dependency wait cycles per kernel
     12.1.0  # Percentage of the kernel's execution time during which the LDS was actively processing operations, including loads, stores, atomics, and shuffle operations.
     12.1.1  # Percentage of CU cycles during which the schedulers issued LDS instructions, averaged across the SIMDs over the lifetime of the kernel.
@@ -295,25 +295,47 @@ assembly="${gpuscout_tmp_dir}/${executable_filename}.s"
 metrics_dir="${gpuscout_tmp_dir}/metrics"
 livereg_dir="${gpuscout_tmp_dir}/livereg"
 
+args_register_spilling=("${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}")
+args_restrict=("${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}")
+args_vectorized_load=("${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}")
+args_atomic_instruction=("${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}")
+args_wavefront_divergence=("${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}")
+args_shared_memory=("${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}")
+args_datatype_conversion=("${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}")
+args_deadlock_detection=("${assembly}" "${json}" "${gpuscout_output_dir}")
+
 start_analysis=$(date +%s.%N)
 
 if [ "$performance_mode" = false ]; then
-  ./analysis_register_spilling  "${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}"
+  timed_run() {
+    local analysis="$1"
+    local binary="./analysis_${analysis}"
+    local array_name="args_${analysis}"
 
-  ./analysis_restrict "${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}"
+    if [ ! -x "$binary" ]; then
+        echo "ERROR: Unknown or unavailable AMD analysis binary: $binary" >&2
+        return 1
+    fi
 
-  ./analysis_vectorized_load "${assembly}" "${metrics_dir}" "${livereg_dir}" "${json}" "${gpuscout_output_dir}"
+    if ! declare -p "$array_name" &>/dev/null; then
+        echo "ERROR: No argument array defined for AMD analysis: $analysis" >&2
+        return 1
+    fi
 
-  ./analysis_atomic_instruction "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
+    local -n current_args="$array_name"
 
-  ./analysis_wavefront_divergence "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
-
-  ./analysis_shared_memory "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
-
-  ./analysis_datatype_conversion "${assembly}" "${metrics_dir}" "${json}" "${gpuscout_output_dir}"
-
-  ./analysis_deadlock_detection "${assembly}" "${json}" "${gpuscout_output_dir}"
-
+    t0=$(date +%s.%N)
+    "$binary" "${current_args[@]}" # Execute the analysis binary with its arguments
+    t1=$(date +%s.%N)
+    dt=$(awk "BEGIN {print $t1 - $t0}")
+    echo "Time for $analysis: ${dt}s"
+  }
+  for analysis in "${enabled_analyses[@]}"; do
+    if ! timed_run "$analysis"; then
+            echo "ERROR: AMD analysis failed: $analysis" >&2
+            exit 1
+        fi
+    done
 else
   # Use Multi-Threading for faster analysis -> each analysis within its own thread
   analysis_logs_dir="${gpuscout_tmp_dir}/analysis_tmp_outputs"
