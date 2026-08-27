@@ -118,41 +118,6 @@ sms=16
 kernels_arg=""
 analysis_arg=""
 nsys_hotspot_kernels_count="${pre_nsys_hotspot_kernels_count}"
-case "$vendor" in
-    nvidia)
-        valid_analyses=(
-            register_spilling
-            use_restrict
-            vectorization
-            global_atomics
-            warp_divergence
-            use_texture
-            use_shared
-            datatype_conversion
-            deadlock_detection
-        )
-        ;;
-    amd)
-        valid_analyses=(
-            register_spilling
-            restrict
-            vectorized_load
-            atomic_instruction
-            wavefront_divergence
-            shared_memory
-            datatype_conversion
-            deadlock_detection
-        )
-        ;;
-    all)
-        # This case requires special handling if both vendor pipelines
-        # are executed, because some analyses use different names.
-        ;;
-    *)
-        echo "ERROR: Unknown vendor: $vendor" >&2
-        exit 1
-        ;;
-esac
 while true; do
     case "$1" in
         -h | --help)
@@ -218,6 +183,41 @@ while true; do
             ;;
     esac
 done
+case "$vendor" in
+    nvidia)
+        valid_analyses=(
+            register_spilling
+            use_restrict
+            vectorization
+            global_atomics
+            warp_divergence
+            use_texture
+            use_shared
+            datatype_conversion
+            deadlock_detection
+        )
+        ;;
+    amd)
+        valid_analyses=(
+            register_spilling
+            restrict
+            vectorized_load
+            atomic_instruction
+            wavefront_divergence
+            shared_memory
+            datatype_conversion
+            deadlock_detection
+        )
+        ;;
+    all)
+        # This case requires special handling if both vendor pipelines
+        # are executed, because some analyses use different names.
+        ;;
+    *)
+        echo "ERROR: Unknown vendor: $vendor" >&2
+        exit 1
+        ;;
+esac
 
 ###### Utility functions for validating and normalizing comma-separated lists (used for --kernels and --analysis arguments)######
 trim_whitespace() { # remove leading and trailing whitespace
@@ -586,7 +586,9 @@ echo "==== Dry-run: $dry_run"
 echo "==== Verbose: $verbose"
 echo "==== JSON Output: $json"
 echo "==== Performance Mode (Multi-threading): $performance_mode"
-echo "==== Kernels Filter: ${kernels_arg:-<not set: auto-select kernels from generated SASS (cubin-scoped)>}"
+if ["$vendor" = "nvidia"]; then
+    echo "==== Kernels Filter: ${kernels_arg:-<not set: auto-select kernels from generated SASS (cubin-scoped)>}"
+fi
 echo "==== Analyses: ${analysis_arg:-<not set: all analyses>}"
 if [ "$vendor" = "nvidia" ]; then
     echo "==== Nsight Hotspot Kernels: ${nsys_hotspot_kernels_count:-<disabled>}"
