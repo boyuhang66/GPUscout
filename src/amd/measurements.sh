@@ -1,5 +1,5 @@
 #!/bin/bash
-# This script is used to collect dynamic  profiling data for AMD GPUs using rocprof-compute and perform various analyses on the collected data.
+# This script is used to collect dynamic profiling data for AMD GPUs using rocprof-compute and perform various analyses on the collected data.
 echo "======================================================================================================"
 if [ "$dry_run" = false ]; then
   # Enable all analyses when --analysis is omitted. Otherwise, use the analyses selected by the user.
@@ -307,6 +307,8 @@ args_deadlock_detection=("${assembly}" "${json}" "${gpuscout_output_dir}")
 start_analysis=$(date +%s.%N)
 
 if [ "$performance_mode" = false ]; then
+  # Time a command (wall clock) and print duration.
+  # Usage: timed_run "<label>" <command> [args...]
   timed_run() {
     local analysis="$1"
     local binary="./analysis_${analysis}"
@@ -340,33 +342,60 @@ else
   # Use Multi-Threading for faster analysis -> each analysis within its own thread
   analysis_logs_dir="${gpuscout_tmp_dir}/analysis_tmp_outputs"
   mkdir -p "$analysis_logs_dir"
-  declare -a names=() pids=()
+  declare -a names=() pids=() rc=()
 
-  all_log="${analysis_logs_dir}/all_analyses.log"
-  : >"$all_log"
+  for analysis in "${enabled_analyses[@]}"; do 
+    binary="./analysis_${analysis}"
+    array_name="args_${analysis}"
 
-  run() {
-    local name="$1"; shift
+    if [ ! -x "$binary" ]; then
+        echo "ERROR: Unknown or unavailable AMD analysis binary: $binary" >&2
+        exit 1
+    fi
+
+    if ! declare -p "$array_name" &>/dev/null; then
+        echo "ERROR: No argument array defined for AMD analysis: $analysis" >&2
+        exit 1
+    fi
+  done
+
+  timed_run() {
+    local analysis="$1"
+    local binary="./analysis_${analysis}"
+    local array_name="args_${analysis}"
+    local private_log="${analysis_logs_dir}/${analysis}.log"
+
+    local -n current_args="$array_name"
+
+    : > "$private_log" # Clear the private log file
     (
-      "$@" # Execute the passed command
-      rc=$? # Captures the exit code
-      exit "$rc"
-    ) >>"$all_log" 2>&1 &
+        local t0 t1 dt analysis_rc
+        t0=$(date +%s.%N)
+
+        if "$binary" "${current_args[@]}"; then
+            analysis_rc=0
+        else
+            analysis_rc=$?
+        fi
+
+        t1=$(date +%s.%N)
+        dt=$(awk "BEGIN {print $t1 - $t0}")
+
+        echo "Time for $analysis: ${dt}s" 
+        exit "$analysis_rc"
+    ) >>"$private_log" 2>&1 &
+
+    names+=("$analysis")
     pids+=("$!")
   }
-
-  # Launch all analyses in parallel
-  run register_spilling      ./analysis_register_spilling  "$assembly" "$metrics_dir" "$livereg_dir" "$json" "$gpuscout_output_dir"
-  run restrict               ./analysis_restrict           "$assembly" "$metrics_dir" "$livereg_dir" "$json" "$gpuscout_output_dir"
-  run vectorized_load        ./analysis_vectorized_load    "$assembly" "$metrics_dir" "$livereg_dir" "$json" "$gpuscout_output_dir"
-  run atomic_instruction     ./analysis_atomic_instruction "$assembly" "$metrics_dir" "$json" "$gpuscout_output_dir"
-  run wavefront_divergence   ./analysis_wavefront_divergence "$assembly" "$metrics_dir" "$json" "$gpuscout_output_dir"
-  run shared_memory          ./analysis_shared_memory      "$assembly" "$metrics_dir" "$json" "$gpuscout_output_dir"
-  run datatype_conversion    ./analysis_datatype_conversion "$assembly" "$metrics_dir" "$json" "$gpuscout_output_dir"
-  run deadlock_detection     ./analysis_deadlock_detection "$assembly" "$json" "$gpuscout_output_dir"
-
+  
+  # Launch all selected analyses in parallel
+  for analysis in "${enabled_analyses[@]}"; do
+    timed_run "$analysis"
+  done
+  
+  analysis_failed=false
   # Wait and collect exit codes
-  declare -a rc=()
   for i in "${!pids[@]}"; do
     if wait "${pids[$i]}"; then
       rc[$i]=0
@@ -375,11 +404,23 @@ else
     fi
   done
 
-  # Print captured outputs after all are done
-  cat "$all_log"
+  # Print each analysis output separately and in launch order.
+  for i in "${!names[@]}"; do
+    cat "${analysis_logs_dir}/${names[$i]}.log"
 
+    if [ "${rc[$i]}" -ne 0 ]; then
+      echo \
+        "ERROR: AMD analysis '${names[$i]}' failed with exit code ${rc[$i]}." \
+        >&2
+    fi
+  done
+
+  if [ "$analysis_failed" = true ]; then
+    echo "ERROR: One or more AMD analyses failed." >&2
+    exit 1
+  fi
 fi
-
+echo "All AMD analyses completed successfully."
 
 # output all used files in JSON format
 if [ "$json" = true ]; then
