@@ -93,7 +93,7 @@ done
 if [ "@VENDOR@" = "nvidia" ]; then
   options=$(getopt -o hvt:e:c:a:jp -l help,dry_run,verbose,type:,executable:,cubin:,args:,sm_count:,json,performance,kernels:,analysis: -- "${normalized_args[@]}")
 elif [ "@VENDOR@" = "amd" ]; then
-  options=$(getopt -o hvt:e:r:a:jp -l help,dry_run,verbose,type:,executable:,rga:,args:,sm_count:,json,performance,analysis: -- "$@")
+  options=$(getopt -o hvt:e:r:a:jp -l help,dry_run,verbose,type:,executable:,rga:,args:,sm_count:,json,performance,analysis: -- "${normalized_args[@]}")
 else
   options=$(getopt -o hvt:e:c:r:a:jp -l help,dry_run,verbose,type:,executable:,cubin:,rga:,args:,sm_count:,json,performance,kernels:,analysis: -- "${normalized_args[@]}")
 fi
