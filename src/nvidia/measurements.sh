@@ -629,9 +629,8 @@ else
     for name in "${names[@]}"; do
         cat "${analysis_logs_dir}/${name}.log"
     done
-
-    echo "All NVIDIA static analyses completed!"
 fi
+echo "All NVIDIA static analyses completed!"
 
 # Merge all individual JSON files
 
