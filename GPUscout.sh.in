@@ -586,7 +586,7 @@ echo "==== Dry-run: $dry_run"
 echo "==== Verbose: $verbose"
 echo "==== JSON Output: $json"
 echo "==== Performance Mode (Multi-threading): $performance_mode"
-if ["$vendor" = "nvidia"]; then
+if [ "$vendor" = "nvidia" ]; then
     echo "==== Kernels Filter: ${kernels_arg:-<not set: auto-select kernels from generated SASS (cubin-scoped)>}"
 fi
 echo "==== Analyses: ${analysis_arg:-<not set: all analyses>}"
@@ -740,8 +740,8 @@ elif [ "$vendor" = "amd" ]; then
     # creating file containing register pressure information
     echo "==== creating file containing register pressure information "
     mkdir livereg
-    # "$rga" -s bin --livereg livereg/9_73_23_42_${executable_filename}-vgpr.txt --co "$object_file" # 9_73_23_42 to make kernel name extraction easier
-    # "$rga" -s bin --livereg-sgpr livereg/9_73_23_42_${executable_filename}-sgpr.txt --co "$object_file"
+    "$rga" -s bin --livereg livereg/9_73_23_42_${executable_filename}-vgpr.txt --co "$object_file" # 9_73_23_42 to make kernel name extraction easier
+    "$rga" -s bin --livereg-sgpr livereg/9_73_23_42_${executable_filename}-sgpr.txt --co "$object_file"
 
     end_static=$(date +%s.%N)
     static_time=$(awk "BEGIN {print $end_static - $start_static}")
