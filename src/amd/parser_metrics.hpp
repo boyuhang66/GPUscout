@@ -104,6 +104,8 @@ std::unordered_map<std::string, mtc> parser_metrics(const std::string &dir, cons
         if (fs::is_regular_file(entry.status())) 
 	    {
             std::string filename = entry.path().filename().string();
+            std::string pending_kernel_name; // stores the kernel name if it is split over multiple lines
+            bool kernel_name_wrapped = false; // indicates if the kernel name is wrapped over multiple lines
 
             // regular expression to match files ending with _<kernel_name>_metrics.txt
             std::regex file_pattern(".*_([\\w]+)_metrics\\.txt$");
@@ -112,7 +114,7 @@ std::unordered_map<std::string, mtc> parser_metrics(const std::string &dir, cons
             if (std::regex_match(filename, file_match, file_pattern)) 
 	        {
                 mtc mtc_obj = {0}; // zero initialized to prevent undefined behaviour
-                std::string krn_name = "ERROR"; // No error catching needed because metrics wont be added when no krn_name was set
+                std::string krn_name;
                 bool krn_name_set = false;
                 std::ifstream file(entry.path());
 
@@ -126,11 +128,33 @@ std::unordered_map<std::string, mtc> parser_metrics(const std::string &dir, cons
 			            std::smatch line_match;
                         // Kernel name parsing - only needed once per metrics file
                         if (krn_name_set == false) {
-                            if (std::regex_search(line, line_match, kernel_name_pattern())) {
-                                krn_name = kernel_names_table[line_match[1].str()];
-                                krn_name_set = true;
+                            if (std::regex_search(line, line_match, kernel_name_pattern()))
+                            {
+                                // Avoid creating a new error name for each kernel name that is not found in the lookup table
+                                const std::string rocprof_kernel_name = line_match[1].str();
+                                auto kernel_it = kernel_names_table.find(rocprof_kernel_name);
+                                if (kernel_it != kernel_names_table.end())
+                                {
+                                    krn_name = kernel_it->second;
+                                    krn_name_set = true;
+                                }
+
+                                continue;
                             }
-                            else {
+                            // First line of a wrapped kernel name.
+                            if (!kernel_name_wrapped && std::regex_search(line, line_match, wrapped_kernel_name_start_pattern()))
+                            {
+                                pending_kernel_name = line_match[1].str();
+                                kernel_name_wrapped = true;
+                                continue;
+                            }
+                            if (kernel_name_wrapped) 
+                            {
+                                if (parse_wrapped_kernel_name_continuation(line, pending_kernel_name, kernel_names_table, krn_name))
+                                {
+                                    krn_name_set = !krn_name.empty();
+                                    kernel_name_wrapped = false;
+                                }
                                 continue;
                             }
                         }
