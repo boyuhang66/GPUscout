@@ -10,6 +10,27 @@
 
 using json = nlohmann::json;
 
+bool has_register_spilling(const std::unordered_map<std::string, std::vector<mem>>& mem_map)
+{
+    for (const auto& [krn_name, mem_vec] : mem_map)
+    {
+        if (krn_name.empty())
+        {
+            continue;
+        }
+
+        for (const auto& mem_obj : mem_vec)
+        {
+            if (mem_obj.type == WRITE || mem_obj.type == STORE)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 json analysis_register_spilling (
     const std::unordered_map<std::string, std::vector<mem>>& mem_map,
     std::unordered_map<std::string, mtc> mtc_map,
@@ -146,6 +167,27 @@ int main(int argc, char **argv)
 {
     std::string assembly = argv[1];
     auto mem_map = parser_register_spilling(assembly);
+
+    /*! Static detection mode:
+     *  exit 0 -> register spilling detected
+     *  exit 1 -> no register spilling detected
+     */
+    if (argc == 3 && std::strcmp(argv[2], "--detect-only") == 0)
+    {
+        return has_register_spilling(mem_map) ? 0 : 1;
+    }
+
+
+    /*! Full analysis mode:
+     *  exit 0 -> successful analysis
+     *  exit 2 -> invalid arguments
+     */
+    if (argc < 6)
+    {
+        std::cerr << "ERROR: Invalid arguments for register spilling analysis."
+                  << std::endl;
+        return 2;
+    }
 
     //TODO PC stalls
 

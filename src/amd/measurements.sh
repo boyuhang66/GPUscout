@@ -8,21 +8,28 @@ if [ "$dry_run" = false ]; then
     enabled_analyses=()
 		echo "AMD analysis selection mode: automatic (static-triggered)"
 
-    atomic_detector="${gpuscout_dir}/analysis_amd/analysis_atomic_instruction"
+    static_detect_analyses=(
+      register_spilling
+      atomic_instruction
+    )
 
-    if "$atomic_detector" "$assembly" --detect-only; then
-        enabled_analyses+=("atomic_instruction")
-        echo "Detected bottleneck candidate: atomic_instruction"
-    else
-        detector_rc=$?
+    for analysis in "${static_detect_analyses[@]}"; do
+        detector="${gpuscout_dir}/analysis_amd/analysis_${analysis}"
 
-        if [ "$detector_rc" -eq 1 ]; then
-            echo "No atomic instruction bottleneck candidate detected."
+        if "$detector" "$assembly" --detect-only; then
+            enabled_analyses+=("$analysis")
+            echo "Detected bottleneck candidate: $analysis"
         else
-            echo "ERROR: Static atomic instruction detection failed." >&2
-            exit "$detector_rc"
+            detector_rc=$?
+
+            if [ "$detector_rc" -eq 1 ]; then
+                echo "No bottleneck candidate detected: $analysis"
+            else
+                echo "ERROR: Static detection failed for $analysis." >&2
+                exit "$detector_rc"
+            fi
         fi
-    fi
+    done
   else
 		#### Manual mode ####
     # the existing CLI-based bottleneck selection.
