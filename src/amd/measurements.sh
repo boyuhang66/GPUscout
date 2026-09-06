@@ -2,12 +2,33 @@
 # This script is used to collect dynamic profiling data for AMD GPUs using rocprof-compute and perform various analyses on the collected data.
 echo "======================================================================================================"
 if [ "$dry_run" = false ]; then
-  # Enable all analyses when --analysis is omitted. Otherwise, use the analyses selected by the user.
   if [ -z "${analysis_arg:-}" ]; then
-    enabled_analyses=("${valid_analyses[@]}")
+		#### Automatic mode ####
+    # enable analyses only when their static bottleneck occurrence has been detected.
+    enabled_analyses=()
+		echo "AMD analysis selection mode: automatic (static-triggered)"
+
+    atomic_detector="${gpuscout_dir}/analysis_amd/analysis_atomic_instruction"
+
+    if "$atomic_detector" "$assembly" --detect-only; then
+        enabled_analyses+=("atomic_instruction")
+        echo "Detected bottleneck candidate: atomic_instruction"
+    else
+        detector_rc=$?
+
+        if [ "$detector_rc" -eq 1 ]; then
+            echo "No atomic instruction bottleneck candidate detected."
+        else
+            echo "ERROR: Static atomic instruction detection failed." >&2
+            exit "$detector_rc"
+        fi
+    fi
   else
+		#### Manual mode ####
+    # the existing CLI-based bottleneck selection.
     parse_csv_list "${analysis_arg}" "analysis"
     enabled_analyses=("${parsed_csv_list[@]}")
+		echo "AMD analysis selection mode: manual"
   fi
 
   echo "Selected AMD analyses: $(join_by_comma "${enabled_analyses[@]}")"

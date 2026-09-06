@@ -4,6 +4,22 @@
 #include <iostream>
 
 using json = nlohmann::json;
+bool has_atomic_instruction(const std::unordered_map<std::string, atom>& atom_map)
+{
+    for (const auto& [krn_name, atom_obj] : atom_map)
+    {
+        if (krn_name.empty())
+        {
+            continue;
+        }
+
+        if (atom_obj.num_g > 0 || atom_obj.num_s > 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
 
 json analysis_atomic_instruction(
     const std::unordered_map<std::string, atom>& atom_map,
@@ -172,6 +188,26 @@ int main(int argc, char **argv)
     auto tuple = parser_atomic_instruction(assembly);
     auto atom_map = std::get<0>(tuple);
     auto lbl_map = std::get<1>(tuple);
+
+    /*! Static detection mode:
+     *  exit 0 -> atomic instruction detected
+     *  exit 1 -> no atomic instruction detected
+     */
+    if (argc == 3 && std::strcmp(argv[2], "--detect-only") == 0)
+    {
+        return has_atomic_instruction(atom_map) ? 0 : 1;
+    }
+
+    /*! Full analysis mode:
+     *  exit 0 -> successful analysis
+     *  exit 2 -> invalid arguments
+     */
+    if (argc < 5)
+    {
+        std::cerr << "ERROR: Invalid arguments for atomic instruction analysis."
+                  << std::endl;
+        return 2;
+    }
 
     std::string mtc_dir = argv[2];
     auto mtc_map = parser_metrics(mtc_dir, assembly);

@@ -100,6 +100,8 @@ parser_atomic_instruction(const std::string &filename)
                 atom_obj.shr_atom.clear();
 
                 brc_vec.clear();
+                lbl_vec.clear();
+                cur_brc.clear();
 
                 krn_name = match[1].str();
             }

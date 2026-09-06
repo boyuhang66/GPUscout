@@ -589,7 +589,7 @@ echo "==== Performance Mode (Multi-threading): $performance_mode"
 if [ "$vendor" = "nvidia" ]; then
     echo "==== Kernels Filter: ${kernels_arg:-<not set: auto-select kernels from generated SASS (cubin-scoped)>}"
 fi
-echo "==== Analyses: ${analysis_arg:-<not set: all analyses>}"
+echo "==== Analyses: ${analysis_arg:-<not set: analyses will be selected automatically based on static assembly analysis>}"
 if [ "$vendor" = "nvidia" ]; then
     echo "==== Nsight Hotspot Kernels: ${nsys_hotspot_kernels_count:-<disabled>}"
 fi
@@ -745,6 +745,10 @@ elif [ "$vendor" = "amd" ]; then
 
     end_static=$(date +%s.%N)
     static_time=$(awk "BEGIN {print $end_static - $start_static}")
+
+    assembly="${gpuscout_tmp_dir}/${executable_filename}.s"
+    metrics_dir="${gpuscout_tmp_dir}/metrics"
+    livereg_dir="${gpuscout_tmp_dir}/livereg"
 fi
 
 
