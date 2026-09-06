@@ -11,6 +11,7 @@ if [ "$dry_run" = false ]; then
     static_detect_analyses=(
       register_spilling
       atomic_instruction
+      datatype_conversion
     )
 
     for analysis in "${static_detect_analyses[@]}"; do

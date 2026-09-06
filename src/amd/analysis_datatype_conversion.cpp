@@ -4,6 +4,25 @@
 
 using json = nlohmann::json;
 
+bool has_datatype_conversion(
+    const std::unordered_map<std::string, conv>& conv_map)
+{
+    for (const auto& [krn_name, conv_obj] : conv_map)
+    {
+        if (krn_name.empty())
+        {
+            continue;
+        }
+
+        if (conv_obj.F2F_cnt > 0 || conv_obj.I2F_cnt > 0 || conv_obj.F2I_cnt > 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 json analysis_datatype_conversion(
     const std::unordered_map<std::string, conv>& conv_map,
     std::unordered_map<std::string, mtc> mtc_map)
@@ -133,6 +152,26 @@ int main(int argc, char **argv)
 {
     std::string assembly = argv[1];
     auto conv_map = parser_datatype_conversion(assembly);
+
+    /*! Static detection mode:
+     *  exit 0 -> datatype conversion detected
+     *  exit 1 -> no datatype conversion detected
+     */
+    if (argc == 3 && std::strcmp(argv[2], "--detect-only") == 0)
+    {
+        return has_datatype_conversion(conv_map) ? 0 :1;
+    }
+
+    /*! Full analysis mode:
+     *  exit 0 -> successful analysis
+     *  exit 2 -> invalid arguments
+     */
+    if (argc < 5)
+    {
+        std::cerr << "ERROR: Invalid arguments for datatype conversion analysis."
+                  << std::endl;
+        return 2;
+    }
 
     std::string mtc_dir = argv[2];
     auto mtc_map = parser_metrics(mtc_dir, assembly);
