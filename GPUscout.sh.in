@@ -712,9 +712,11 @@ if [ "$vendor" = "nvidia" ]; then
 elif [ "$vendor" = "amd" ]; then
     cd "${gpuscout_tmp_dir}" || exit
 
+    # Static preparation: extract the AMD code object and generate AMDGCN assembly.
+    start_static_prep=$(date +%s.%N)
+
     # creating object file
     echo "==== creating object file"
-    start_static=$(date +%s.%N)
     roc-obj-ls -v "${executable}" | \
     awk '/amdgcn/{print $3}' | \
     roc-obj-extract -o
@@ -737,14 +739,8 @@ elif [ "$vendor" = "amd" ]; then
     #llvm-objdump -d --mcpu=gfx90a --source -l -C --symbolize-operands "$object_file" > "${executable_filename}".s
     llvm-objdump -d --mcpu="${llvm_target_name}" --source -l --symbolize-operands "$object_file" > "${executable_filename}".s
 
-    # creating file containing register pressure information
-    echo "==== creating file containing register pressure information "
-    mkdir livereg
-    "$rga" -s bin --livereg livereg/9_73_23_42_${executable_filename}-vgpr.txt --co "$object_file" # 9_73_23_42 to make kernel name extraction easier
-    "$rga" -s bin --livereg-sgpr livereg/9_73_23_42_${executable_filename}-sgpr.txt --co "$object_file"
-
-    end_static=$(date +%s.%N)
-    static_time=$(awk "BEGIN {print $end_static - $start_static}")
+    end_static_prep=$(date +%s.%N)
+    static_prep_time=$(awk "BEGIN {print $end_static_prep - $start_static_prep}")
 
     assembly="${gpuscout_tmp_dir}/${executable_filename}.s"
     metrics_dir="${gpuscout_tmp_dir}/metrics"

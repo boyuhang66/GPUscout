@@ -1,46 +1,108 @@
 #!/bin/bash
 # This script is used to collect dynamic profiling data for AMD GPUs using rocprof-compute and perform various analyses on the collected data.
 echo "======================================================================================================"
-if [ "$dry_run" = false ]; then
-  if [ -z "${analysis_arg:-}" ]; then
-		#### Automatic mode ####
-    # enable analyses only when their static bottleneck occurrence has been detected.
-    enabled_analyses=()
-		echo "AMD analysis selection mode: automatic (static-triggered)"
+if [ -z "${analysis_arg:-}" ]; then
+  #### Automatic mode ####
+  # enable analyses only when their static bottleneck occurrence has been detected.
+  enabled_analyses=()
+  echo "AMD analysis selection mode: automatic (static-triggered)"
 
-    static_detect_analyses=(
-      register_spilling
-      atomic_instruction
-      datatype_conversion
-    )
+  static_detect_analyses=(
+    register_spilling
+    atomic_instruction
+    datatype_conversion
+    deadlock_detection
+    restrict
+    shared_memory
+    vectorized_load
+    wavefront_divergence
+  )
+  
+  start_static_detect=$(date +%s.%N)
+  selected_static_detect_time=0
 
-    for analysis in "${static_detect_analyses[@]}"; do
-        detector="${gpuscout_dir}/analysis_amd/analysis_${analysis}"
+  for analysis in "${static_detect_analyses[@]}"; do
+      detector="${gpuscout_dir}/analysis_amd/analysis_${analysis}"
 
-        if "$detector" "$assembly" --detect-only; then
-            enabled_analyses+=("$analysis")
-            echo "Detected bottleneck candidate: $analysis"
-        else
-            detector_rc=$?
+      detector_start=$(date +%s.%N)
 
-            if [ "$detector_rc" -eq 1 ]; then
-                echo "No bottleneck candidate detected: $analysis"
-            else
-                echo "ERROR: Static detection failed for $analysis." >&2
-                exit "$detector_rc"
-            fi
-        fi
-    done
-  else
-		#### Manual mode ####
-    # the existing CLI-based bottleneck selection.
-    parse_csv_list "${analysis_arg}" "analysis"
-    enabled_analyses=("${parsed_csv_list[@]}")
-		echo "AMD analysis selection mode: manual"
-  fi
+      if "$detector" "$assembly" --detect-only; then
+          detector_rc=0
+      else
+          detector_rc=$?
+      fi
+
+      detector_end=$(date +%s.%N)
+      detector_time=$(awk "BEGIN {print $detector_end - $detector_start}")
+
+      echo "Static detection time for $analysis: ${detector_time}s"
+
+      if [ "$detector_rc" -eq 0 ]; then
+          enabled_analyses+=("$analysis")
+          selected_static_detect_time=$(awk \
+              "BEGIN {print $selected_static_detect_time + $detector_time}")
+
+          echo "Detected bottleneck candidate: $analysis"
+
+      elif [ "$detector_rc" -eq 1 ]; then
+          echo "No bottleneck candidate detected: $analysis"
+
+      else
+          echo "ERROR: Static detection failed for $analysis." >&2
+          exit "$detector_rc"
+      fi
+  done
+
+  end_static_detect=$(date +%s.%N)
+  static_detect_time=$(awk "BEGIN {print $end_static_detect - $start_static_detect}")
+
+  echo "Total static detection time: ${static_detect_time}s"
+  echo "Static detection time of selected analyses: ${selected_static_detect_time}s"
+
+  end_static_detect=$(date +%s.%N)
+  static_detect_time=$(awk "BEGIN {print $end_static_detect - $start_static_detect}")
+else
+  #### Manual mode ####
+  # the existing CLI-based bottleneck selection.
+  parse_csv_list "${analysis_arg}" "analysis"
+  enabled_analyses=("${parsed_csv_list[@]}")
+  echo "AMD analysis selection mode: manual"
+
+  static_detect_time=0
+fi
 
   echo "Selected AMD analyses: $(join_by_comma "${enabled_analyses[@]}")"
 
+#### Check if any of the selected analyses require register pressure information ####
+livereg_required=false
+_livereg_analyses=(
+    register_spilling
+    restrict
+    vectorized_load
+)
+
+for analysis in "${enabled_analyses[@]}"; do
+    if array_contains "$analysis" "${_livereg_analyses[@]}"; then
+        livereg_required=true
+        break
+    fi
+done
+
+# creating file containing register pressure information
+mkdir -p "$livereg_dir"
+livereg_time=0
+if [ "$livereg_required" = true ]; then
+  echo "==== creating file containing register pressure information "
+  start_livereg=$(date +%s.%N)
+  "$rga" -s bin --livereg livereg/9_73_23_42_${executable_filename}-vgpr.txt --co "$object_file" # 9_73_23_42 to make kernel name extraction easier
+  "$rga" -s bin --livereg-sgpr livereg/9_73_23_42_${executable_filename}-sgpr.txt --co "$object_file"
+  end_livereg=$(date +%s.%N)
+  livereg_time=$(awk "BEGIN {print $end_livereg - $start_livereg}")
+else
+  echo "Skipping register pressure information collection: selected analyses do not require it."
+fi
+
+if [ "$dry_run" = false ]; then
   ##### Per-analysis metric requirements #### 
   # Build a de-duplicated list of metric IDs required by the enabled analyses.
   _metrics_set=()
@@ -464,12 +526,15 @@ end_analysis=$(date +%s.%N)
 analysis_time=$(awk "BEGIN {print $end_analysis - $start_analysis}")
 
 echo "======================================================================================================"
-echo "Time for Static Code Analysis: ${static_time}s"
+echo "Time for Static Preparation:     ${static_prep_time}s"
+echo "Time for Static Detection:       ${static_detect_time}s"
+echo "Time for Live Register Analysis: ${livereg_time}s"
 if [ "$dry_run" = false ]; then
     echo "Time for PC Sampling:          ${pcsampling_time}s"
     echo "Time for Metrics Collection:   ${metrics_time}s"
 fi
 echo "Time for Merging Analysis:     ${analysis_time}s"
+echo "Total Time:                    $(awk "BEGIN {print $static_prep_time + $static_detect_time + $livereg_time + $pcsampling_time + $metrics_time + $analysis_time}")s"
 echo "======================================================================================================"
 
 cd ..
