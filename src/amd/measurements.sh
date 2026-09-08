@@ -71,7 +71,7 @@ else
   static_detect_time=0
 fi
 
-  echo "Selected AMD analyses: $(join_by_comma "${enabled_analyses[@]}")"
+echo "Selected AMD analyses: $(join_by_comma "${enabled_analyses[@]}")"
 
 #### Check if any of the selected analyses require register pressure information ####
 livereg_required=false
@@ -199,51 +199,54 @@ if [ "$dry_run" = false ]; then
   if [ "$amd_metrics_required" = true ]; then
     echo "==== collecting kernel profiling data"
     start_metrics=$(date +%s.%N)
-    # Filter required metrics mapped to hardware block for rocprof-compute profile 3.0.0 with -b option
-    declare -A _metric_profile_block=(
-        [7.2.4]="SQ"
-        [10.1.6]="SQ"
-        [10.2.14]="SQ"
-        [11.2.5]="SQ"
-        [12.1.0]="SQ"
-        [12.1.1]="SQ"
-        [12.1.3]="SQ"
-        [12.2.5]="SQ"
-        [15.2.5]="TA" #[15.1.9]="TA"
-        [15.3.0]="TA" #[15.1.13]="TA"
-        [16.3.3]="TCP"
-        [16.3.5]="TCP"
-        [17.2.7]="TCC"
-        [17.3.1]="TCC"
-        [17.3.4]="TCC"
-        [17.6.10]="TCC" #[17.5.10]="TCC"
-    )
-
-    _profile_blocks_set=()
-    for metric_id in "${_metrics_set[@]}"; do
-        block="${_metric_profile_block[$metric_id]:-}"
-
-        if [ -z "$block" ]; then
-            echo "ERROR: No AMD hardware block mapping for metric ID $metric_id"
-            exit 1
-        fi
-
-        if ! array_contains "$block" "${_profile_blocks_set[@]}"; then
-            _profile_blocks_set+=("$block")
-        fi
-    done
-
     profile_help=$(rocprof-compute profile --help 2>&1)
-    # Determine whether the current version of rocprof-compute profile supports filtering by metric IDs or only by hardware blocks.
+
     declare -a profile_filter_arguments=()
+
+    # Determine whether the current rocprof-compute version supports
+    # filtering directly by metric IDs or only by hardware blocks.
     if printf '%s\n' "$profile_help" | grep -Eqi 'metric([[:space:]]+|-)id'; then
         profile_filter_arguments=(
             -b
             "${_metrics_set[@]}"
         )
-
         echo "AMD profile filter mode: metric IDs"
     else
+        # Map requested metrics to their corresponding hardware blocks for rocprof-compute versions that do not support metric-ID filtering.
+        declare -A _metric_profile_block=(
+            [7.2.4]="SQ"
+            [10.1.6]="SQ"
+            [10.2.14]="SQ"
+            [11.2.5]="SQ"
+            [12.1.0]="SQ"
+            [12.1.1]="SQ"
+            [12.1.3]="SQ"
+            [12.2.5]="SQ"
+            [15.2.5]="TA"
+            [15.3.0]="TA"
+            [16.3.3]="TCP"
+            [16.3.5]="TCP"
+            [17.2.7]="TCC"
+            [17.3.1]="TCC"
+            [17.3.4]="TCC"
+            [17.6.10]="TCC"
+        )
+
+        _profile_blocks_set=()
+
+        for metric_id in "${_metrics_set[@]}"; do
+            block="${_metric_profile_block[$metric_id]:-}"
+
+            if [ -z "$block" ]; then
+                echo "ERROR: No AMD hardware block mapping for metric ID $metric_id"
+                exit 1
+            fi
+
+            if ! array_contains "$block" "${_profile_blocks_set[@]}"; then
+                _profile_blocks_set+=("$block")
+            fi
+        done
+
         profile_filter_arguments=(
             -b
             "${_profile_blocks_set[@]}"
