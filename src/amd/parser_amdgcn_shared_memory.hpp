@@ -244,7 +244,7 @@ parser_shared_memory(const std::string &filename)
                 for (const auto& j : vdata)
                 {
                     int cnt_to_shrd_mem_st = 0;
-                    if (iters.find(j) == iters.end())
+                    if (iters.find(j) != iters.end())
                     {
                         auto gbl_ld = iters[j]->gbl_ld;
                         for (auto it = gbl_ld.rbegin(); it != gbl_ld.rend(); ++it)

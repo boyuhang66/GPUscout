@@ -4,6 +4,33 @@
 
 using json = nlohmann::json;
 
+bool has_shared_memory_candidate(const std::unordered_map<std::string, std::vector<reg>>& reg_map)
+{
+    for (const auto& [krn_name, reg_vec] : reg_map)
+    {
+        if (krn_name.empty())
+        {
+            continue;
+        }
+
+        for (const auto& reg_obj : reg_vec)
+        {
+            if (reg_obj.ld_count > 0 && reg_obj.op_count > 1 && reg_obj.op_count > reg_obj.ld_count)
+            {
+                for (const auto& gbl_ld_obj : reg_obj.gbl_ld)
+                {
+                    if (!gbl_ld_obj.lds_bit)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
 json analysis_shared_memory(
     const std::unordered_map<std::string, std::vector<reg>>& reg_map,
     std::unordered_map<std::string, std::vector<brc>> brc_map,
@@ -208,6 +235,25 @@ int main(int argc, char **argv)
     auto tuple = parser_shared_memory(assembly);
     auto reg_map = std::get<0>(tuple);
     auto brc_map = std::get<1>(tuple);
+
+    /*! Static detection mode:
+     *  exit 0 -> shared memory candidate detected
+     *  exit 1 -> no shared memory candidate detected
+     */
+    if (argc == 3 && std::strcmp(argv[2], "--detect-only") == 0)
+    {
+        return has_shared_memory_candidate(reg_map) ? 0 : 1;
+    }
+
+    /*! Full analysis mode:
+     *  exit 0 -> successful analysis
+     *  exit 2 -> invalid arguments
+     */
+    if (argc < 5)
+    {
+        std::cerr << "ERROR: Invalid arguments for shared memory analysis." << std::endl;
+        return 2;
+    }
 
     std::string mtc_dir = argv[2];
     auto mtc_map = parser_metrics(mtc_dir, assembly);
