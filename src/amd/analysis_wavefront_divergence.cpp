@@ -4,6 +4,30 @@
 
 using json = nlohmann::json;
 
+bool has_wavefront_divergence_candidate(const std::unordered_map<std::string, std::vector<brc>>& brc_map, const std::unordered_map<std::string, location>& tgt_map)
+{
+    for (const auto& [krn_name, brc_vec] : brc_map)
+    {
+        if (krn_name.empty())
+        {
+            continue;
+        }
+
+        for (const auto& brc_obj : brc_vec)
+        {
+            auto tgt_it = tgt_map.find(brc_obj.tgt);
+
+            if (tgt_it != tgt_map.end() &&
+                (brc_obj.loc.file_name != tgt_it->second.file_name || brc_obj.loc.line_num != tgt_it->second.line_num))
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 json analysis_wavefront_divergence(
     std::unordered_map<std::string, std::vector<brc>> brc_map,
     std::unordered_map<std::string, location> tgt_map,
@@ -89,6 +113,25 @@ int main(int argc, char **argv)
     auto tuple = parser_wavefront_divergence(assembly);
     auto brc_map = std::get<0>(tuple);
     auto tgt_map = std::get<1>(tuple);
+
+    /*! Static detection mode:
+     *  exit 0 -> wavefront divergence candidate detected
+     *  exit 1 -> no wavefront divergence candidate detected
+     */
+    if (argc == 3 && std::strcmp(argv[2], "--detect-only") == 0)
+    {
+        return has_wavefront_divergence_candidate(brc_map, tgt_map) ? 0 : 1;
+    }
+
+    /*! Full analysis mode:
+     *  exit 0 -> successful analysis
+     *  exit 2 -> invalid arguments
+     */
+    if (argc < 5)
+    {
+        std::cerr << "ERROR: Invalid arguments for wavefront divergence analysis." << std::endl;
+        return 2;
+    }
 
     std::string mtc_dir = argv[2];
     auto mtc_map = parser_metrics(mtc_dir, assembly);
