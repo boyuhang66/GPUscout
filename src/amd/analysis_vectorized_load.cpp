@@ -5,6 +5,27 @@
 
 using json = nlohmann::json;
 
+bool has_vectorized_load_candidate(const std::unordered_map<std::string, std::vector<ld>>& ld_map)
+{
+    for (const auto& [krn_name, ld_vec] : ld_map)
+    {
+        if (krn_name.empty())
+        {
+            continue;
+        }
+
+        for (const auto& ld_obj : ld_vec)
+        {
+            if (ld_obj.off.size() > 1 && ld_obj.size == "x1")
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 json analysis_vectorized_load(
     const std::unordered_map<std::string, int>& ld_cnt_map,
     const std::unordered_map<std::string, std::vector<ld>>& ld_map,
@@ -161,6 +182,25 @@ int main(int argc, char **argv)
     auto tuple = parser_vectorized_load(assembly);
     auto ld_cnt_map = std::get<0>(tuple);
     auto ld_map = std::get<1>(tuple);
+
+    /*! Static detection mode:
+     *  exit 0 -> vectorized load candidate detected
+     *  exit 1 -> no vectorized load candidate detected
+     */
+    if (argc == 3 && std::strcmp(argv[2], "--detect-only") == 0)
+    {
+        return has_vectorized_load_candidate(ld_map) ? 0 : 1;
+    }
+
+    /*! Full analysis mode:
+     *  exit 0 -> successful analysis
+     *  exit 2 -> invalid arguments
+     */
+    if (argc < 6)
+    {
+        std::cerr << "ERROR: Invalid arguments for vectorized load analysis." << std::endl;
+        return 2;
+    }
 
     std::string mtc_dir = argv[2];
     auto mtc_map = parser_metrics(mtc_dir, assembly);
