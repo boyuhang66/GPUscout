@@ -52,7 +52,7 @@ json analysis_shared_memory(
             break;
        	}
 
-	std::cout << std::endl;      
+	    std::cout << std::endl;      
         std::cout << "======================================================================"
                   << "================================" << std::endl;
         std::cout << "==== analysis    : local memory" << std::endl;
@@ -71,9 +71,7 @@ json analysis_shared_memory(
                 {
                     if (gbl_ld_obj.lds_bit)
                     {
-                        shared_recommend_flag = false;
-			
-			std::cout << std::endl;
+			            std::cout << std::endl;
                         std::cout << "==== INFO" << std::endl;
                         std::cout << "==== register number " << reg_obj.reg_num
                                   << " is used by global load instruction that transfers data between LDS and"
@@ -89,14 +87,15 @@ json analysis_shared_memory(
                             {"uses_LDS_bit", true},
                             {"pc_offset", gbl_ld_obj.PC_offset}
                         };
+
+                        krn_result["occurrences"].push_back(line_result);
                     }
                 }
 
                 for (auto shr_wr_obj : reg_obj.shr_wr)
                 {
-                    shared_recommend_flag = false;
 
-		    std::cout << std::endl;
+		            std::cout << std::endl;
                     std::cout << "==== INFO" << std::endl;
                     std::cout << "register number " << reg_obj.reg_num
                               << " is storing data in local memory in file " << shr_wr_obj.loc.file_name
@@ -119,77 +118,80 @@ json analysis_shared_memory(
 
                         line_result["instruction_count_to_shared_mem_store"] = shr_wr_obj.cnt_to_shrd_mem_st;
                     }
+
+                    krn_result["occurrences"].push_back(line_result);
                 }
 
-		std::cout << std::endl;
-                std::cout << "==== WARNING" << std::endl;
-                std::cout << "==== since the data at register number " << reg_obj.reg_num << " is accessed multiple "
-                          << "times, you could benefit from using" << std::endl;
-                std::cout << "     local memory instead of global memory" << std::endl;
-                std::cout << "==== register number " << reg_obj.reg_num << " has " << reg_obj.ld_count
-                          << " total global load counts and " << reg_obj.op_count << " computation "
-                          << "instruction counts" << std::endl;
-                std::cout << "==== the following global load instruction (without LDS bit) use the register as vdst "
-                          << "register" << std::endl;
-
-                for (auto gbl_ld_obj : reg_obj.gbl_ld)
+                bool has_candidate_load = std::any_of(reg_obj.gbl_ld.begin(), reg_obj.gbl_ld.end(), [](const auto& gbl_ld_obj) { return !gbl_ld_obj.lds_bit; });
+                if (has_candidate_load)
                 {
-                    if (!gbl_ld_obj.lds_bit)
+                    std::cout << std::endl;
+                    std::cout << "==== WARNING" << std::endl;
+                    std::cout << "==== since the data at register number " << reg_obj.reg_num << " is accessed multiple "
+                            << "times, you could benefit from using" << std::endl;
+                    std::cout << "     local memory instead of global memory" << std::endl;
+                    std::cout << "==== register number " << reg_obj.reg_num << " has " << reg_obj.ld_count
+                            << " total global load counts and " << reg_obj.op_count << " computation "
+                            << "instruction counts" << std::endl;
+                    std::cout << "==== the following global load instruction (without LDS bit) use the register as vdst "
+                            << "register" << std::endl;
+
+                    for (auto gbl_ld_obj : reg_obj.gbl_ld)
                     {
-                        // branch map stores an accumulative vector of branch instructions per branch
+                        if (!gbl_ld_obj.lds_bit)
+                        {
+                            // branch map stores an accumulative vector of branch instructions per branch
 
-                        // returns all conditional branch instructions encountered up to the end of the branch to which
-                        // the global load instruction belongs
-                        //for (auto j : brc_map[gbl_ld_obj.tgt_brc])
-                        //{
-                            // if the branch instructions target the branch, the global load instruction belongs to
-                            //if ((j.loc.line_num != 0) && (gbl_ld_obj.tgt_brc == j.tgt))
+                            // returns all conditional branch instructions encountered up to the end of the branch to which
+                            // the global load instruction belongs
+                            //for (auto j : brc_map[gbl_ld_obj.tgt_brc])
                             //{
-                                std::cout << "==== global load instruction in file " << gbl_ld_obj.loc.file_name
-                                          << " at line " << gbl_ld_obj.loc.line_num << std::endl;
+                                // if the branch instructions target the branch, the global load instruction belongs to
+                                //if ((j.loc.line_num != 0) && (gbl_ld_obj.tgt_brc == j.tgt))
+                                //{
+                                    std::cout << "==== global load instruction in file " << gbl_ld_obj.loc.file_name
+                                            << " at line " << gbl_ld_obj.loc.line_num << std::endl;
 
-                                bool inside_loop = false;
-                                // loop through all branch instructions in the kernel
-                                for (const auto& brc_obj : brc_map[krn_name])
-                                {
-                                    if (brc_obj.tgt == gbl_ld_obj.brc &&
-                                        std::stoi(brc_obj.PC_offset) > std::stoi(gbl_ld_obj.PC_offset) &&
-                                        brc_obj.loop)
+                                    bool inside_loop = false;
+                                    // loop through all branch instructions in the kernel
+                                    for (const auto& brc_obj : brc_map[krn_name])
                                     {
-                                        inside_loop = true;
+                                        if (brc_obj.tgt == gbl_ld_obj.brc &&
+                                            std::stoi(brc_obj.PC_offset) > std::stoi(gbl_ld_obj.PC_offset) &&
+                                            brc_obj.loop)
+                                        {
+                                            inside_loop = true;
+                                        }
                                     }
-                                }
 
-                                if (inside_loop)
-                                {
-                                    std::cout << "==== this global load instruction could be in a loop and "
-                                              << "hence could perform multiple load operations" << std::endl;
+                                    if (inside_loop)
+                                    {
+                                        std::cout << "==== this global load instruction could be in a loop and "
+                                                << "hence could perform multiple load operations" << std::endl;
 
-                                    // TODO PC stall
-                                }
+                                        // TODO PC stall
+                                    }
 
-                                line_result = {
-                                    {"severity", "WARNING"},
-                                    {"file_name", gbl_ld_obj.loc.file_name},
-                                    {"line_number", gbl_ld_obj.loc.line_num},
-                                    {"register", reg_obj.reg_num},
-                                    {"global_load_count", reg_obj.ld_count},
-                                    {"computation_instruction_count", reg_obj.op_count},
-                                    {"computation_instruction_pc_offsets", 0}, //TODO
-                                    {"uses_shared_memory", false},
-                                    {"in_for_loop", inside_loop}
-                                };
+                                    line_result = {
+                                        {"severity", "WARNING"},
+                                        {"file_name", gbl_ld_obj.loc.file_name},
+                                        {"line_number", gbl_ld_obj.loc.line_num},
+                                        // {"pc_offset", gbl_ld_obj.PC_offset},
+                                        {"register", reg_obj.reg_num},
+                                        {"global_load_count", reg_obj.ld_count},
+                                        {"computation_instruction_count", reg_obj.op_count},
+                                        {"computation_instruction_pc_offsets", 0}, //TODO
+                                        {"uses_shared_memory", false},
+                                        {"in_for_loop", inside_loop}
+                                    };
 
-                                shared_recommend_flag = true;
+                                    krn_result["occurrences"].push_back(line_result);
+                                //}
                             //}
-                        //}
+                        }
                     }
+                    shared_recommend_flag = true;
                 }
-            }
-
-            if (!line_result.is_null())
-            {
-                krn_result["occurrences"].push_back(line_result);
             }
         }
 
