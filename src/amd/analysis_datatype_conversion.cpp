@@ -1,20 +1,100 @@
 #include "parser_amdgcn_datatype_conversion.hpp"
 #include "parser_metrics.hpp"
+#include "amd_helper.hpp"
 #include "../utilities/json.hpp"
 
 using json = nlohmann::json;
 
-bool has_datatype_conversion(
-    const std::unordered_map<std::string, conv>& conv_map)
+/*!
+ * Build the reusable static result for the datatype-conversion analysis.
+ * "result" contains the information that belongs to the existing final datatype_conversion.json output.
+ * "metadata" contains internal information required by later pipeline stages and is not written to the final JSON output.
+ */
+json build_static_datatype_conversion_result(const std::unordered_map<std::string, conv>& conv_map)
 {
+    json static_result = {
+        {"result", json::object()},
+        {"metadata", json::object()}
+    };
+
     for (const auto& [krn_name, conv_obj] : conv_map)
     {
+        // TODO: check if this is happening
         if (krn_name.empty())
         {
-            continue;
+            break;
         }
 
-        if (conv_obj.F2F_cnt > 0 || conv_obj.I2F_cnt > 0 || conv_obj.F2I_cnt > 0)
+        json krn_result = {
+            {"occurrences", json::array()}
+        };
+
+        // F2F conversions
+        for (const auto& conversion : conv_obj.F2F_line)
+        {
+            krn_result["occurrences"].push_back({
+                {"severity", "WARNING"},
+                {"file_name", std::get<0>(conversion).file_name},
+                {"line_number", std::get<0>(conversion).line_num},
+                {"pc_offset", std::get<1>(conversion)},
+                {"type", "F2F"}
+            });
+        }
+
+        // I2F conversions
+        for (const auto& conversion : conv_obj.I2F_line)
+        {
+            krn_result["occurrences"].push_back({
+                {"severity", "WARNING"},
+                {"file_name", std::get<0>(conversion).file_name},
+                {"line_number", std::get<0>(conversion).line_num},
+                {"pc_offset", std::get<1>(conversion)},
+                {"type", "I2F"}
+            });
+        }
+
+        // F2I conversions
+        for (const auto& conversion : conv_obj.F2I_line)
+        {
+            krn_result["occurrences"].push_back({
+                {"severity", "WARNING"},
+                {"file_name", std::get<0>(conversion).file_name},
+                {"line_number", std::get<0>(conversion).line_num},
+                {"pc_offset", std::get<1>(conversion)},
+                {"type", "F2I"}
+            });
+        }
+
+        /*
+         * Keep the existing final JSON structure in "result".
+         */
+        static_result["result"][krn_name] = krn_result;
+
+        static_result["metadata"][krn_name] = {
+            {"F2F_count", conv_obj.F2F_cnt},
+            {"I2F_count", conv_obj.I2F_cnt},
+            {"F2I_count", conv_obj.F2I_cnt}
+        };
+    }
+
+    return static_result;
+}
+        
+/*!
+ * Return true if at least one datatype-conversion candidate was found
+ * during static analysis.
+ */
+bool has_datatype_conversion_candidate(const json& static_result)
+{
+    for (const auto& [krn_name, metadata] : static_result["metadata"].items())
+    {
+        const int F2F_count = metadata["F2F_count"].get<int>();
+
+        const int I2F_count = metadata["I2F_count"].get<int>();
+
+        const int F2I_count = metadata["F2I_count"].get<int>();
+
+        if (F2F_count > 0 || I2F_count > 0 || F2I_count > 0)
         {
             return true;
         }
@@ -24,24 +104,16 @@ bool has_datatype_conversion(
 }
 
 json analysis_datatype_conversion(
-    const std::unordered_map<std::string, conv>& conv_map,
+    json static_result,
     std::unordered_map<std::string, mtc> mtc_map)
 {
-    json result;
+    auto& result = static_result["result"];
+    const auto& metadata = static_result["metadata"];
 
-    for (const auto& [krn_name, conv_obj] : conv_map)
+    for (auto& [krn_name, krn_result] : result.items())
     {
-        json krn_result = {
-            {"occurrences", json::array()}
-        };
 
-        // TODO check if this is happening
-        if (krn_name == "")
-        {
-            break;
-        }
-
-	std::cout << std::endl;
+	    std::cout << std::endl;
         std::cout << "======================================================================"
                   << "================================" << std::endl;
         std::cout << "==== analysis    : datatype conversion" << std::endl;
@@ -49,53 +121,57 @@ json analysis_datatype_conversion(
         std::cout << "======================================================================"
                   << "================================" << std::endl;
 
-        if (conv_obj.F2F_cnt > 0)
+        const auto& occurrences = krn_result["occurrences"];
+
+        const int F2F_count = metadata[krn_name]["F2F_count"].get<int>();
+
+        const int I2F_count = metadata[krn_name]["I2F_count"].get<int>();
+
+        const int F2I_count = metadata[krn_name]["F2I_count"].get<int>();
+        
+        // ---------------- F2F ----------------
+
+        if (F2F_count > 0)
         {
-	    std::cout << std::endl;
+	        std::cout << std::endl;
             std::cout << "==== WARNING" << std::endl;
-            std::cout << "==== there are " << conv_obj.F2F_cnt << " F2F conversions found at the following locations:"
+            std::cout << "==== there are " << F2F_count << " F2F conversions found at the following locations:"
                       << std::endl;
 
-            for (const auto& i : conv_obj.F2F_line)
+            for (const auto& occurrence : occurrences)
             {
-                std::cout << "     file name " << std::get<0>(i).file_name << " line " << std::get<0>(i).line_num
+                if (occurrence["type"].get<std::string>() != "F2F")
+                {
+                    continue;
+                }
+                std::cout << "     file name " << occurrence["file_name"].get<std::string>() << " line " << occurrence["line_number"].get<int>()
                           << std::endl;
-
-                krn_result["occurrences"].push_back({
-                    {"severity", "WARNING"},
-                    {"file_name", std::get<0>(i).file_name},
-                    {"line_number", std::get<0>(i).line_num},
-                    {"pc_offset", std::get<1>(i)},
-                    {"type", "F2F"}
-                });
             }
         }
         else
         {
-	    std::cout << std::endl;
+	        std::cout << std::endl;
             std::cout << "==== INFO" << std::endl;
             std::cout << "==== no F2F conversions found" << std::endl;
         }
 
-        if (conv_obj.I2F_cnt > 0)
+        // ---------------- I2F ----------------
+
+        if (I2F_count > 0)
         {
-	    std::cout << std::endl;
+	        std::cout << std::endl;
             std::cout << "==== WARNING" << std::endl;
-            std::cout << "==== there are " << conv_obj.I2F_cnt << " I2F conversions found at the following locations:"
+            std::cout << "==== there are " << I2F_count << " I2F conversions found at the following locations:"
                       << std::endl;
 
-            for (const auto& i : conv_obj.I2F_line)
+            for (const auto& occurrence : occurrences)
             {
-                std::cout << "     file name " << std::get<0>(i).file_name << " line " << std::get<0>(i).line_num
+                if (occurrence["type"].get<std::string>() != "I2F")
+                {
+                    continue;
+                }
+                std::cout << "     file name " << occurrence["file_name"].get<std::string>() << " line " << occurrence["line_number"].get<int>()
                           << std::endl;
-
-                krn_result["occurrences"].push_back({
-                        {"severity", "WARNING"},
-                    {"file_name", std::get<0>(i).file_name},
-                    {"line_number", std::get<0>(i).line_num},
-                    {"pc_offset", std::get<1>(i)},
-                    {"type", "I2F"}
-                });
             }
         }
         else
@@ -105,30 +181,32 @@ json analysis_datatype_conversion(
             std::cout << "==== no I2F conversions found" << std::endl;
         }
 
-        if (conv_obj.F2I_cnt > 0)
+        // ---------------- F2I ----------------
+        if (F2I_count > 0)
         {
-	    std::cout << std::endl;
+	        std::cout << std::endl;
             std::cout << "==== WARNING" << std::endl;
-            std::cout << "==== there are " << conv_obj.F2F_cnt << " F2I conversions found at the following locations:"
+            std::cout << "==== there are " << F2I_count << " F2I conversions found at the following locations:"
                       << std::endl;
 
-            for (const auto& i : conv_obj.F2I_line)
+            for (const auto& occurrence : occurrences)
             {
-                std::cout << "     file name " << std::get<0>(i).file_name << " line " << std::get<0>(i).line_num
-                          << std::endl;
+                if (occurrence["type"].get<std::string>() != "F2I")
+                {
+                    continue;
+                }
 
-                krn_result["occurrences"].push_back({
-                        {"severity", "WARNING"},
-                    {"file_name", std::get<0>(i).file_name},
-                    {"line_number", std::get<0>(i).line_num},
-                    {"pc_offset", std::get<1>(i)},
-                    {"type", "F2I"}
-                });
+                std::cout
+                    << "     file name "
+                    << occurrence["file_name"].get<std::string>()
+                    << " line "
+                    << occurrence["line_number"].get<int>()
+                    << std::endl;
             }
         }
         else
         {
-	    std::cout << std::endl;
+            std::cout << std::endl;
             std::cout << "==== INFO" << std::endl;
             std::cout << "==== no F2I conversions found" << std::endl;
         }
@@ -141,8 +219,6 @@ json analysis_datatype_conversion(
                   << std::endl;
         std::cout << "     issued to the VALU" << std::endl;
         std::cout << "     " << mtc_obj.ID_10_2_14 << std::endl;
-
-        result[krn_name] = krn_result;
     }
 
     return result;
@@ -151,15 +227,37 @@ json analysis_datatype_conversion(
 int main(int argc, char **argv)
 {
     std::string assembly = argv[1];
-    auto conv_map = parser_datatype_conversion(assembly);
+    const auto static_result_file = static_result_path(assembly, "datatype_conversion");
 
     /*! Static detection mode:
+     *
+     *  1. Parse AMDGCN assembly.
+     *  2. Build the reusable static result.
+     *  3. Detect whether a datatype-conversion candidate exists.
+     *  4. Preserve the static result for the later full-analysis stage.
+     *
      *  exit 0 -> datatype conversion detected
      *  exit 1 -> no datatype conversion detected
+     *  exit 2 -> error
      */
     if (argc == 3 && std::strcmp(argv[2], "--detect-only") == 0)
     {
-        return has_datatype_conversion(conv_map) ? 0 :1;
+        auto conv_map = parser_datatype_conversion(assembly);
+        json static_result = build_static_datatype_conversion_result(conv_map);
+
+        if (!has_datatype_conversion_candidate(static_result))
+        {
+            return 1;
+        }
+
+        if (!save_static_result(static_result_file, static_result))
+        {
+            std::cerr << "ERROR: Could not save static datatype conversion result to "
+                      << static_result_file << std::endl;
+            return 2;
+        }
+
+        return 0;
     }
 
     /*! Full analysis mode:
@@ -173,13 +271,24 @@ int main(int argc, char **argv)
         return 2;
     }
 
+    json static_result;
+    /*
+     * Automatic mode: reuse the static result generated during detection.
+     * Manual mode: no static result exists, therefore perform the original assembly parsing here.
+     */
+    if (!load_static_result(static_result_file, static_result))
+    {
+        auto conv_map = parser_datatype_conversion(assembly);
+        static_result = build_static_datatype_conversion_result(conv_map);
+    }
+
     std::string mtc_dir = argv[2];
     auto mtc_map = parser_metrics(mtc_dir, assembly);
 
     int save_as_json = std::strcmp(argv[3], "true") == 0;
     std::string json_out_dir = argv[4];
 
-    json result = analysis_datatype_conversion(conv_map, mtc_map);
+    json result = analysis_datatype_conversion(static_result, mtc_map);
 
     if (save_as_json)
     {

@@ -10,6 +10,7 @@
 #include <regex>
 #include "amdgcn_instructions.hpp"
 #include "../utilities/helper.hpp"
+#include "../utilities/json.hpp"
 
 /*
  * Defines functions used in multiple analyses
@@ -142,6 +143,45 @@ std::unordered_map<std::string, std::string> build_kernel_names_table(const std:
         std::cout << "Building mangled kernel names: Failed opening assembly file";
     }
     return kernel_names_table;
+}
+
+bool save_static_result( const std::filesystem::path& filename, const nlohmann::json& result)
+{
+    std::filesystem::create_directories(filename.parent_path());
+    std::ofstream file(filename);
+
+    if (!file)
+    {
+        return false;
+    }
+
+    file << result.dump(4);
+    return true;
+}
+
+bool load_static_result(const std::filesystem::path& filename, nlohmann::json& result)
+{
+    std::ifstream file(filename);
+
+    if (!file)
+    {
+        return false;
+    }
+
+    file >> result;
+    return true;
+}
+
+/*!
+ * Return the path of the temporary static result.
+ * Example: assembly file path: /tmp-gpuscout/kernel.s
+ * Result: /tmp-gpuscout/static_results/register_spilling.json
+ */
+std::filesystem::path static_result_path(const std::string& assembly, std::string result_filename)
+{
+    return std::filesystem::path(assembly).parent_path()
+           / "static_results"
+           / (result_filename + ".json"); 
 }
 
 #endif //GPUSCOUT_AMD_HELPER_HPP

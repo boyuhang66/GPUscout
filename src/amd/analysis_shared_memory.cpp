@@ -1,29 +1,152 @@
 #include "parser_amdgcn_shared_memory.hpp"
 #include "parser_metrics.hpp"
+#include "amd_helper.hpp"
+#include <unordered_set>
 #include "../utilities/json.hpp"
 
 using json = nlohmann::json;
 
-bool has_shared_memory_candidate(const std::unordered_map<std::string, std::vector<reg>>& reg_map)
+/*!
+ * Build the reusable static result for the shared-memory analysis.
+ * "result" keeps the existing final shared_memory.json structure.
+ */
+json build_static_shared_memory_result(const std::unordered_map<std::string, std::vector<reg>>& reg_map, const std::unordered_map<std::string, std::vector<brc>>& brc_map)
 {
+    json static_result = {
+        {"result", json::object()},
+    };
+
     for (const auto& [krn_name, reg_vec] : reg_map)
     {
         if (krn_name.empty())
         {
-            continue;
+            break;
         }
 
-        for (const auto& reg_obj : reg_vec)
+        json krn_result = {
+            {"occurrences", json::array()}
+        };
+
+        for (auto reg_obj : reg_vec)
         {
-            if (reg_obj.ld_count > 0 && reg_obj.op_count > 1 && reg_obj.op_count > reg_obj.ld_count)
+            // consider only registers with load count > 0, operation count > 1 and operation count > load count
+            if (!((reg_obj.ld_count > 0) && (reg_obj.op_count > 1) && (reg_obj.op_count > reg_obj.ld_count)))
+                continue;
+        
+            // -------------------------------------------------
+            // Global loads that already use the LDS bit
+            // -------------------------------------------------
+            for (const auto& gbl_ld_obj : reg_obj.gbl_ld)
             {
-                for (const auto& gbl_ld_obj : reg_obj.gbl_ld)
+                if (!gbl_ld_obj.lds_bit)
                 {
-                    if (!gbl_ld_obj.lds_bit)
+                    continue;
+                }
+
+                json line_result = {
+                    {"severity", "INFO"},
+                    {"file_name", gbl_ld_obj.loc.file_name},
+                    {"line_number", gbl_ld_obj.loc.line_num},
+                    {"instruction_type", "global_load"},
+                    {"register", reg_obj.reg_num},
+                    {"uses_LDS_bit", true},
+                    {"pc_offset", gbl_ld_obj.PC_offset}
+                };
+
+                krn_result["occurrences"].push_back(line_result);
+            }
+
+            // ------------------------------------------------------------
+            // LDS writes
+            // ------------------------------------------------------------
+            for (const auto& shr_wr_obj : reg_obj.shr_wr)
+            {
+                json line_result = {
+                    {"severity", "INFO"},
+                    {"file_name", shr_wr_obj.loc.file_name},
+                    {"line_number", shr_wr_obj.loc.line_num},
+                    {"instruction_type", "lds_write"},
+                    {"register", reg_obj.reg_num},
+                    {"pc_offset", shr_wr_obj.PC_offset}
+                };
+
+                if (shr_wr_obj.cnt_to_shrd_mem_st > 0)
+                {
+                    line_result["instruction_count_to_shared_mem_store"] = shr_wr_obj.cnt_to_shrd_mem_st;
+                }
+
+                krn_result["occurrences"].push_back(line_result);
+            }
+
+            // ------------------------------------------------------------
+            // Candidate global loads without the LDS bit
+            // ------------------------------------------------------------
+            for (const auto& gbl_ld_obj : reg_obj.gbl_ld)
+            {
+                if (gbl_ld_obj.lds_bit)
+                {
+                    continue;
+                }
+
+                // branch map stores an accumulative vector of branch instructions per branch
+
+                // returns all conditional branch instructions encountered up to the end of the branch to which
+                // the global load instruction belongs
+                //for (auto j : brc_map[gbl_ld_obj.tgt_brc])
+                //{
+                    // if the branch instructions target the branch, the global load instruction belongs to
+                    //if ((j.loc.line_num != 0) && (gbl_ld_obj.tgt_brc == j.tgt))
+                bool inside_loop = false;
+                auto brc_it = brc_map.find(krn_name);
+                if (brc_it != brc_map.end())
+                {
+                    for (const auto& brc_obj : brc_it->second)
                     {
-                        return true;
+                        if (brc_obj.tgt == gbl_ld_obj.brc &&
+                            std::stoi(brc_obj.PC_offset) >
+                                std::stoi(gbl_ld_obj.PC_offset) &&
+                            brc_obj.loop)
+                        {
+                            inside_loop = true;
+                            break;
+                        }
                     }
                 }
+
+                json line_result = {
+                    {"severity", "WARNING"},
+                    {"file_name", gbl_ld_obj.loc.file_name},
+                    {"line_number", gbl_ld_obj.loc.line_num},
+                    // Current candidate global-load instruction.
+                    // {"pc_offset", gbl_ld_obj.PC_offset},
+                    {"register", reg_obj.reg_num},
+                    {"global_load_count", reg_obj.ld_count},
+                    {"computation_instruction_count", reg_obj.op_count},
+                    {"computation_instruction_pc_offsets", 0}, // TODO: parser currently does not preserve these PCs.
+                    {"uses_shared_memory", false},
+                    {"in_for_loop", inside_loop}
+                };
+
+                krn_result["occurrences"].push_back(line_result);
+            }
+        }
+
+        static_result["result"][krn_name] = krn_result;
+    }
+
+    return static_result;
+}
+
+bool has_shared_memory_candidate(const json& static_result)
+{
+    for (const auto& [krn_name, krn_result] :
+         static_result["result"].items())
+    {
+        for (const auto& occurrence : krn_result["occurrences"])
+        {
+            if (occurrence["severity"].get<std::string>() == "WARNING")
+            {
+                return true;
             }
         }
     }
@@ -32,26 +155,13 @@ bool has_shared_memory_candidate(const std::unordered_map<std::string, std::vect
 }
 
 json analysis_shared_memory(
-    const std::unordered_map<std::string, std::vector<reg>>& reg_map,
-    std::unordered_map<std::string, std::vector<brc>> brc_map,
+    json static_result,
     std::unordered_map<std::string, mtc> mtc_map)
 {
-    json result;
+    auto& result = static_result["result"];
 
-    for (const auto& [krn_name, reg_vec] : reg_map)
+    for (auto& [krn_name, krn_result] : result.items())
     {
-        json krn_result = {
-            {"occurrences", {}}
-        };
-
-        bool shared_recommend_flag = false;
-
-        // TODO check if this is happening
-        if (krn_name == "")
-        {
-            break;
-       	}
-
 	    std::cout << std::endl;      
         std::cout << "======================================================================"
                   << "================================" << std::endl;
@@ -60,144 +170,98 @@ json analysis_shared_memory(
         std::cout << "======================================================================"
                   << "================================" << std::endl;
         
-        for (auto reg_obj : reg_vec)
+        auto& occurrences = krn_result["occurrences"];
+        bool shared_recommend_flag = false;
+
+        /*
+        * Used so that the register-level WARNING summary is printed
+        * only once even when several candidate global-load instructions
+        * belong to the same register.
+        */
+        std::unordered_set<std::string> warned_registers;
+
+        for (auto& occurrence: occurrences)
         {
-            json line_result;
+            const std::string severity = occurrence["severity"].get<std::string>();
 
-            // consider only registers with load count > 0, operation count > 1 and operation count > load count
-            if ((reg_obj.ld_count > 0) && (reg_obj.op_count > 1) && (reg_obj.op_count > reg_obj.ld_count))
+            // INFO occurrences
+            if (severity == "INFO")
             {
-                for (auto gbl_ld_obj : reg_obj.gbl_ld)
+                const std::string instruction_type = occurrence["instruction_type"].get<std::string>();
+
+                // Global load already using LDS bit
+                if (instruction_type == "global_load")
                 {
-                    if (gbl_ld_obj.lds_bit)
-                    {
-			            std::cout << std::endl;
-                        std::cout << "==== INFO" << std::endl;
-                        std::cout << "==== register number " << reg_obj.reg_num
-                                  << " is used by global load instruction that transfers data between LDS and"
-                                  << " memory instead of VGPRs and memory, in file " << gbl_ld_obj.loc.file_name
-                                  << " at line number " << gbl_ld_obj.loc.line_num << " of your code" << std::endl;
-
-                        line_result = {
-                            {"severity", "INFO"},
-                            {"file_name", gbl_ld_obj.loc.file_name},
-                            {"line_number", gbl_ld_obj.loc.line_num},
-                            {"instruction_type", "global_load"},
-                            {"register", reg_obj.reg_num},
-                            {"uses_LDS_bit", true},
-                            {"pc_offset", gbl_ld_obj.PC_offset}
-                        };
-
-                        krn_result["occurrences"].push_back(line_result);
-                    }
+                    std::cout << std::endl;
+                    std::cout << "==== INFO" << std::endl;
+                    std::cout << "==== register number " << occurrence["register"].get<std::string>()
+                              << " is used by global load instruction that transfers data between LDS and"
+                              << " memory instead of VGPRs and memory, in file " << occurrence["file_name"].get<std::string>()
+                              << " at line number " << occurrence["line_number"].get<int>() << " of your code" << std::endl;
                 }
 
-                for (auto shr_wr_obj : reg_obj.shr_wr)
+                // Data is latter written to LDS
+                else if (instruction_type == "lds_write")
                 {
-
-		            std::cout << std::endl;
                     std::cout << "==== INFO" << std::endl;
-                    std::cout << "register number " << reg_obj.reg_num
-                              << " is storing data in local memory in file " << shr_wr_obj.loc.file_name
-                              << " at line number " << shr_wr_obj.loc.line_num << " of your code" << std::endl;
+                    std::cout << "register number " << occurrence["register"].get<std::string>()
+                              << " is storing data in local memory in file " << occurrence["file_name"].get<std::string>()
+                              << " at line number " << occurrence["line_number"].get<int>() << " of your code" << std::endl;
 
-                    line_result = {
-                        {"severity", "INFO"},
-                        {"file_name", shr_wr_obj.loc.file_name},
-                        {"line_number", shr_wr_obj.loc.line_num},
-                        {"instruction_type", "lds_write"},
-                        {"register", reg_obj.reg_num},
-                        {"pc_offset", shr_wr_obj.PC_offset}
-                    };
-
-                    if (shr_wr_obj.cnt_to_shrd_mem_st > 0)
+                    if (occurrence.contains("instruction_count_to_shared_mem_store"))
                     {
                         std::cout << "==== data loaded from global memory is written to LDS after "
-                                  << shr_wr_obj.cnt_to_shrd_mem_st << " instructions." << std::endl;
+                                  << occurrence["instruction_count_to_shared_mem_store"].get<int>() << " instructions." << std::endl;
                         std::cout << "     using the LDS bit in global load instruction might help" << std::endl;
-
-                        line_result["instruction_count_to_shared_mem_store"] = shr_wr_obj.cnt_to_shrd_mem_st;
                     }
-
-                    krn_result["occurrences"].push_back(line_result);
                 }
+                
+                continue;
+            }
 
-                bool has_candidate_load = std::any_of(reg_obj.gbl_ld.begin(), reg_obj.gbl_ld.end(), [](const auto& gbl_ld_obj) { return !gbl_ld_obj.lds_bit; });
-                if (has_candidate_load)
+            // Candidate global-load instruction
+            if (severity == "WARNING" )
+            {
+                shared_recommend_flag = true;
+                const std::string reg_num = occurrence["register"].get<std::string>();
+
+                /*
+                 * Print the register-level summary once.
+                 *
+                 * There may now be several WARNING occurrences for the same
+                 * register because each candidate load is stored separately.
+                 */
+                if (warned_registers.insert(reg_num).second)
                 {
                     std::cout << std::endl;
                     std::cout << "==== WARNING" << std::endl;
-                    std::cout << "==== since the data at register number " << reg_obj.reg_num << " is accessed multiple "
+                    std::cout << "==== since the data at register number " << reg_num << " is accessed multiple "
                             << "times, you could benefit from using" << std::endl;
                     std::cout << "     local memory instead of global memory" << std::endl;
-                    std::cout << "==== register number " << reg_obj.reg_num << " has " << reg_obj.ld_count
-                            << " total global load counts and " << reg_obj.op_count << " computation "
+                    std::cout << "==== register number " << reg_num << " has " << occurrence["global_load_count"].get<int>()
+                            << " total global load counts and " << occurrence["computation_instruction_count"].get<int>() << " computation "
                             << "instruction counts" << std::endl;
                     std::cout << "==== the following global load instruction (without LDS bit) use the register as vdst "
                             << "register" << std::endl;
 
-                    for (auto gbl_ld_obj : reg_obj.gbl_ld)
-                    {
-                        if (!gbl_ld_obj.lds_bit)
-                        {
-                            // branch map stores an accumulative vector of branch instructions per branch
+                }
 
-                            // returns all conditional branch instructions encountered up to the end of the branch to which
-                            // the global load instruction belongs
-                            //for (auto j : brc_map[gbl_ld_obj.tgt_brc])
-                            //{
-                                // if the branch instructions target the branch, the global load instruction belongs to
-                                //if ((j.loc.line_num != 0) && (gbl_ld_obj.tgt_brc == j.tgt))
-                                //{
-                                    std::cout << "==== global load instruction in file " << gbl_ld_obj.loc.file_name
-                                            << " at line " << gbl_ld_obj.loc.line_num << std::endl;
+                std::cout << "==== global load instruction in file " << occurrence["file_name"].get<std::string>()
+                        << " at line " << occurrence["line_number"].get<int>() << std::endl;
+                
+                if (occurrence["in_for_loop"].get<bool>())
+                {
+                    std::cout << "==== this global load instruction could be in a loop and "
+                            << "hence could perform multiple load operations" << std::endl;
 
-                                    bool inside_loop = false;
-                                    // loop through all branch instructions in the kernel
-                                    for (const auto& brc_obj : brc_map[krn_name])
-                                    {
-                                        if (brc_obj.tgt == gbl_ld_obj.brc &&
-                                            std::stoi(brc_obj.PC_offset) > std::stoi(gbl_ld_obj.PC_offset) &&
-                                            brc_obj.loop)
-                                        {
-                                            inside_loop = true;
-                                        }
-                                    }
-
-                                    if (inside_loop)
-                                    {
-                                        std::cout << "==== this global load instruction could be in a loop and "
-                                                << "hence could perform multiple load operations" << std::endl;
-
-                                        // TODO PC stall
-                                    }
-
-                                    line_result = {
-                                        {"severity", "WARNING"},
-                                        {"file_name", gbl_ld_obj.loc.file_name},
-                                        {"line_number", gbl_ld_obj.loc.line_num},
-                                        // {"pc_offset", gbl_ld_obj.PC_offset},
-                                        {"register", reg_obj.reg_num},
-                                        {"global_load_count", reg_obj.ld_count},
-                                        {"computation_instruction_count", reg_obj.op_count},
-                                        {"computation_instruction_pc_offsets", 0}, //TODO
-                                        {"uses_shared_memory", false},
-                                        {"in_for_loop", inside_loop}
-                                    };
-
-                                    krn_result["occurrences"].push_back(line_result);
-                                //}
-                            //}
-                        }
-                    }
-                    shared_recommend_flag = true;
+                    // TODO PC stall
                 }
             }
         }
 
         if (!shared_recommend_flag)
         {
-	    std::cout << std::endl;
+	        std::cout << std::endl;
             std::cout << "==== INFO" << std::endl;
             std::cout << "==== no global loads found in the kernel which can benifit from using local memory"
                       << std::endl;
@@ -233,18 +297,40 @@ json analysis_shared_memory(
 int main(int argc, char **argv)
 {
     std::string assembly = argv[1];
-    
-    auto tuple = parser_shared_memory(assembly);
-    auto reg_map = std::get<0>(tuple);
-    auto brc_map = std::get<1>(tuple);
+    const auto static_result_file = static_result_path(assembly, "shared_memory");
 
     /*! Static detection mode:
-     *  exit 0 -> shared memory candidate detected
-     *  exit 1 -> no shared memory candidate detected
+     *
+     *  1. Parse AMDGCN assembly.
+     *  2. Build the reusable static result.
+     *  3. Detect whether a shared-memory candidate exists.
+     *  4. Preserve the result for the later full-analysis stage.
+     *
+     *  exit 0 -> shared-memory candidate detected
+     *  exit 1 -> no shared-memory candidate detected
+     *  exit 2 -> error
      */
     if (argc == 3 && std::strcmp(argv[2], "--detect-only") == 0)
     {
-        return has_shared_memory_candidate(reg_map) ? 0 : 1;
+        auto tuple = parser_shared_memory(assembly);
+        auto reg_map = std::get<0>(tuple);
+        auto brc_map = std::get<1>(tuple);
+
+        json static_result = build_static_shared_memory_result(reg_map, brc_map);
+
+        if (!has_shared_memory_candidate(static_result))
+        {
+            return 1;
+        }
+
+        if (!save_static_result(static_result_file, static_result))
+        {
+            std::cerr << "ERROR: Could not save static shared memory result to "
+                      << static_result_file << std::endl;
+            return 2;
+        }
+
+        return 0;
     }
 
     /*! Full analysis mode:
@@ -257,13 +343,28 @@ int main(int argc, char **argv)
         return 2;
     }
 
+    json static_result;
+    /*
+     * Automatic mode: static detection already parsed the assembly, so reuse the intermediate static result.
+     * Manual mode: no intermediate result exists, therefore parse the assembly once here and build the same static representation.
+     */
+    if (!load_static_result(static_result_file, static_result))
+    {
+        auto tuple = parser_shared_memory(assembly);
+
+        auto reg_map = std::get<0>(tuple);
+        auto brc_map = std::get<1>(tuple);
+
+        static_result = build_static_shared_memory_result(reg_map, brc_map);
+    }
+
     std::string mtc_dir = argv[2];
     auto mtc_map = parser_metrics(mtc_dir, assembly);
 
     int save_as_json = std::strcmp(argv[3], "true") == 0;
     std::string json_out_dir = argv[4];
 
-    json result = analysis_shared_memory(reg_map, brc_map, mtc_map);
+    json result = analysis_shared_memory(static_result, mtc_map);
 
     if (save_as_json)
     {
