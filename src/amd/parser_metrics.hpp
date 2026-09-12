@@ -54,14 +54,14 @@ struct mtc
     double ID_12_1_1;
     double ID_12_1_3;
     double ID_12_2_5;
-    double ID_15_1_9;
-    double ID_15_1_13;
+    double ID_15_2_5; // ID_15_1_9;
+    double ID_15_3_0; // ID_15_1_13;
     double ID_16_3_3;
     double ID_16_3_5;
     double ID_17_2_7;
     double ID_17_3_1;
     double ID_17_3_4;
-    double ID_17_5_10;
+    double ID_17_6_10; // ID_17_5_10;
 };
 
 // Defines which metrics are stored in the json result
@@ -74,14 +74,14 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(mtc,
     ID_12_1_1,
     ID_12_1_3,
     ID_12_2_5,
-    ID_15_1_9,
-    ID_15_1_13,
+    ID_15_2_5,// ID_15_1_9,
+    ID_15_3_0,// ID_15_1_13,
     ID_16_3_3,
     ID_16_3_5,
     ID_17_2_7,
     ID_17_3_1,
     ID_17_3_4,
-    ID_17_5_10
+    ID_17_6_10//ID_17_5_10
 )
 
 
@@ -193,13 +193,21 @@ std::unordered_map<std::string, mtc> parser_metrics(const std::string &dir, cons
                         {
                             mtc_obj.ID_12_2_5 = line_match[2].str() == " " ? 0 : std::stod(line_match[2].str());
                         }
-                        if(std::regex_search(line, line_match, line_pattern("15\\.1\\.9")))
+                        // if(std::regex_search(line, line_match, line_pattern("15\\.1\\.9")))
+                        // {
+                        //     mtc_obj.ID_15_1_9 = line_match[2].str() == " " ? 0 : std::stod(line_match[2].str());
+                        // }
+                        // if(std::regex_search(line, line_match, line_pattern("15\\.1\\.13")))
+                        // {
+                        //     mtc_obj.ID_15_1_13 = line_match[2].str() == " " ? 0 : std::stod(line_match[2].str());
+                        // }
+                        if(std::regex_search(line, line_match, line_pattern("15\\.2\\.5")))
                         {
-                            mtc_obj.ID_15_1_9 = line_match[2].str() == " " ? 0 : std::stod(line_match[2].str());
+                            mtc_obj.ID_15_2_5 = line_match[2].str() == " " ? 0 : std::stod(line_match[2].str());
                         }
-                        if(std::regex_search(line, line_match, line_pattern("15\\.1\\.13")))
+                        if(std::regex_search(line, line_match, line_pattern("15\\.3\\.0")))
                         {
-                            mtc_obj.ID_15_1_13 = line_match[2].str() == " " ? 0 : std::stod(line_match[2].str());
+                            mtc_obj.ID_15_3_0 = line_match[2].str() == " " ? 0 : std::stod(line_match[2].str());
                         }
                         if(std::regex_search(line, line_match, line_pattern("16\\.3\\.3")))
                         {
@@ -221,9 +229,13 @@ std::unordered_map<std::string, mtc> parser_metrics(const std::string &dir, cons
                         {
                             mtc_obj.ID_17_3_4 = line_match[2].str() == " " ? 0 : std::stod(line_match[2].str());
                         }
-                        if(std::regex_search(line, line_match, line_pattern("17\\.5\\.10")))
+                        // if(std::regex_search(line, line_match, line_pattern("17\\.5\\.10")))
+                        // {
+                        //     mtc_obj.ID_17_5_10 = line_match[2].str() == " " ? 0 : std::stod(line_match[2].str());
+                        // }
+                        if(std::regex_search(line, line_match, line_pattern("17\\.6\\.10")))
                         {
-                            mtc_obj.ID_17_5_10 = line_match[2].str() == " " ? 0 : std::stod(line_match[2].str());
+                            mtc_obj.ID_17_6_10 = line_match[2].str() == " " ? 0 : std::stod(line_match[2].str());
                         }
                     }
                     file.close();
