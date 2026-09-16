@@ -17,7 +17,7 @@
  */
 
 // Used for extracting the kernel name from the rocprof-compute file
-std::regex kernel_name_pattern() {
+inline std::regex kernel_name_pattern() {
     /*
      * ╒═════════╤════════════════════════════════════════╤═════════╤═══════════╤════════════╤══════════════╤═══════╤═════╕
      * │   index │ Kernel_Name                            │   Count │   Sum(ns) │   Mean(ns) │   Median(ns) │   Pct │ S   │
@@ -118,7 +118,7 @@ inline bool parse_wrapped_kernel_name_continuation(const std::string& line, std:
 /// @brief Builds mangled kernel name lookup table because rocprof-compute cant provide this
 /// @param  object file for matching mangled kernel names
 /// @return lookup table containg the mangled and unmangled kernel
-std::unordered_map<std::string, std::string> build_kernel_names_table(const std::string &assembly_filename) {
+inline std::unordered_map<std::string, std::string> build_kernel_names_table(const std::string &assembly_filename) {
     // Build mangled kernel name lookup table - rocprof-compute cant provide this
     // Because of this the mangled kernel name is taken out of the object file
     std::unordered_map<std::string, std::string> kernel_names_table;
@@ -145,7 +145,7 @@ std::unordered_map<std::string, std::string> build_kernel_names_table(const std:
     return kernel_names_table;
 }
 
-bool save_static_result( const std::filesystem::path& filename, const nlohmann::json& result)
+inline bool save_static_result(const std::filesystem::path& filename, const nlohmann::json& result)
 {
     std::filesystem::create_directories(filename.parent_path());
     std::ofstream file(filename);
@@ -159,7 +159,7 @@ bool save_static_result( const std::filesystem::path& filename, const nlohmann::
     return true;
 }
 
-bool load_static_result(const std::filesystem::path& filename, nlohmann::json& result)
+inline bool load_static_result(const std::filesystem::path& filename, nlohmann::json& result)
 {
     std::ifstream file(filename);
 
@@ -168,8 +168,15 @@ bool load_static_result(const std::filesystem::path& filename, nlohmann::json& r
         return false;
     }
 
-    file >> result;
-    return true;
+    try
+    {
+        file >> result;
+        return true;
+    }
+    catch (const nlohmann::json::exception&)
+    {
+        return false;
+    }
 }
 
 /*!
@@ -177,7 +184,7 @@ bool load_static_result(const std::filesystem::path& filename, nlohmann::json& r
  * Example: assembly file path: /tmp-gpuscout/kernel.s
  * Result: /tmp-gpuscout/static_results/register_spilling.json
  */
-std::filesystem::path static_result_path(const std::string& assembly, std::string result_filename)
+inline std::filesystem::path static_result_path(const std::string& assembly, std::string result_filename)
 {
     return std::filesystem::path(assembly).parent_path()
            / "static_results"
