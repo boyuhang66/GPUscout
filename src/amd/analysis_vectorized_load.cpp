@@ -1,94 +1,9 @@
-#include "parser_amdgcn_vectorized_load.hpp"
 #include "parser_metrics.hpp"
 #include "parser_liveregisters.hpp"
 #include "amd_helper.hpp"
 #include "../utilities/json.hpp"
 
 using json = nlohmann::json;
-
-/*!
- * Build the reusable static result for the vectorized load analysis.
- * "result" contains the information that belongs to the existing final vectorized_load.json output.
- * "metadata" contains internal information required by later pipeline stages and is not be written to the final JSON output.
- */
-json build_static_vectorized_load_result(const std::unordered_map<std::string, int>& ld_cnt_map, const std::unordered_map<std::string, std::vector<ld>>& ld_map)
-{
-    json static_result = {
-        {"result", json::object()},
-        {"metadata", json::object()}
-    };
-
-    for (const auto& [krn_name_1, ld_cnt] : ld_cnt_map)
-    {
-        if (krn_name_1 == "")
-        {
-            break;
-        }
-
-        json krn_result = {
-            {"total", 0},
-            {"occurrences", json::array()}
-        };
-
-        for (const auto& [krn_name_2, ld_vec] : ld_map)
-        {
-            if (krn_name_1 != krn_name_2)
-            {
-                continue;
-            }
-
-            for (const auto& ld_obj : ld_vec)
-            {
-                if (ld_obj.off.size() > 1 && ld_obj.size == "x1")
-                {
-                    krn_result["occurrences"].push_back({
-                        {"severity", "WARNING"},
-                        {"file_name", ld_obj.loc.file_name},
-                        {"line_number", ld_obj.loc.line_num},
-                        {"pc_offset", ld_obj.PC_offset},
-                        {"register", ld_obj.vaddr_srsrc},
-                        {"adjacent_memory_accesses", ld_obj.off.size()}
-                    });
-                }
-                else
-                {
-                    krn_result["occurrences"].push_back({
-                        {"severity", "INFO"},
-                        {"file_name", ld_obj.loc.file_name},
-                        {"line_number", ld_obj.loc.line_num},
-                        {"pc_offset", ld_obj.PC_offset},
-                        {"register", ld_obj.vaddr_srsrc},
-                        {"register_load_type", ld_obj.size}
-                    });
-                }
-            }
-        }
-
-        static_result["result"][krn_name_1] = krn_result;
-
-        static_result["metadata"][krn_name_1] = {
-            {"non_vectorized_load_count", ld_cnt}
-        };
-    }
-
-    return static_result;
-}
-
-bool has_vectorized_load_candidate(const json& static_result)
-{
-    for (const auto& [krn_name, krn_result] : static_result["result"].items())
-    {
-        for (const auto& occurrence : krn_result["occurrences"])
-        {
-            if (occurrence["severity"].get<std::string>() == "WARNING")
-            {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
 
 json analysis_vectorized_load(
     json static_result,
@@ -106,7 +21,7 @@ json analysis_vectorized_load(
             break;
         }
 
-	    std::cout << std::endl;
+        std::cout << std::endl;
         std::cout << "======================================================================"
                   << "================================" << std::endl;
         std::cout << "==== analysis    : vectorized load" << std::endl;
@@ -121,7 +36,7 @@ json analysis_vectorized_load(
             ld_cnt = metadata[krn_name]["non_vectorized_load_count"].get<int>();
         }
 
-	    std::cout << std::endl;
+        std::cout << std::endl;
         std::cout << "==== INFO" << std::endl;
         std::cout << "==== total number of non-vectorized global vector load instances for this kernel "
                   << ld_cnt << std::endl;
@@ -202,9 +117,16 @@ json analysis_vectorized_load(
             // TODO PC stall
         }
 
-        auto mtc_obj = mtc_map[krn_name];
+        // Avoid implicitly inserting a default metric record when this kernel has no parsed metrics.
+        const auto metric_it = mtc_map.find(krn_name);
+        if (metric_it == mtc_map.end())
+        {
+            std::cerr << "ERROR: Missing metrics for kernel " << krn_name << std::endl;
+            continue;
+        }
+        const auto& mtc_obj = metric_it->second;
 
-	    std::cout << std::endl;
+        std::cout << std::endl;
         std::cout << "==== INFO" << std::endl;
         std::cout << "==== number of cycles a wavefront in the kernel dispatch stalled waiting on memory of any kind"
                   << std::endl;
@@ -215,66 +137,25 @@ json analysis_vectorized_load(
 
 int main(int argc, char **argv)
 {
-    std::string assembly = argv[1];
-
-    auto static_result_file = static_result_path(assembly, "vectorized_load");
-
-    /*! Static detection mode:
-     *  1. Parse AMDGCN assembly.
-     *  2. Build the reusable static result.
-     *  3. Detect whether a vectorized load candidate exists.
-     *  4. Preserve the static result for the later full-analysis stage.
-     *
-     *  exit 0 -> vectorized load candidate detected
-     *  exit 1 -> no vectorized load candidate detected
-     *  exit 2 -> error
-     */
-    if (argc == 3 && std::strcmp(argv[2], "--detect-only") == 0)
-    {
-        auto tuple = parser_vectorized_load(assembly);
-        auto ld_cnt_map = std::get<0>(tuple);
-        auto ld_map = std::get<1>(tuple);
-
-        json static_result =  build_static_vectorized_load_result(ld_cnt_map, ld_map);
-        if (!has_vectorized_load_candidate(static_result))
-        {
-            return 1;
-        }
-
-        if (!save_static_result(static_result_file, static_result))
-        {
-            std::cerr << "ERROR: Failed to save static vectorized load result."
-                      << std::endl;
-            return 2;
-        }
-
-        return 0;
-    }
-
     /*! Full analysis mode:
      *  exit 0 -> successful analysis
+     *  exit 1 -> invalid static result
      *  exit 2 -> invalid arguments
      */
-    if (argc < 6)
+    if (argc != 6)
     {
-        std::cerr << "ERROR: Invalid arguments for vectorized load analysis." << std::endl;
+        std::cerr << "Usage: " << argv[0]
+                  << " <assembly-file> <metrics-dir> <live-register-dir> <save-as-json> <json-output-dir>\\n";
         return 2;
     }
 
+    const std::string assembly = argv[1];
+    const auto static_result_file = static_result_path(assembly, "vectorized_load");
     json static_result;
-
-    /*!
-     * Automatic mode: reuse the result generated during static detection.
-     * Manual mode: no static cache exists, therefore parse once here.
-     */
     if (!load_static_result(static_result_file, static_result))
     {
-        auto tuple = parser_vectorized_load(assembly);
-
-        auto ld_cnt_map = std::get<0>(tuple);
-        auto ld_map = std::get<1>(tuple);
-
-        static_result = build_static_vectorized_load_result(ld_cnt_map, ld_map);
+        std::cerr << "ERROR: Missing or invalid static vectorized load result: " << static_result_file << std::endl;
+        return 1;
     }
 
     std::string mtc_dir = argv[2];

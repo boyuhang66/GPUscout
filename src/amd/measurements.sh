@@ -4,6 +4,10 @@ echo "==========================================================================
 ########################################################################
 # Analysis on assmble files 
 ########################################################################
+if [ ! -s "$assembly" ]; then
+    echo "ERROR: AMD assembly file was not created or is empty: $assembly" >&2
+    exit 2
+fi
 automatic_mode=false
 if [ -z "${analysis_arg:-}" ]; then
   #### Automatic mode ####
@@ -27,10 +31,10 @@ if [ -z "${analysis_arg:-}" ]; then
   selected_static_detect_time=0
 
   for analysis in "${static_detect_analyses[@]}"; do
-    detector="${gpuscout_dir}/analysis_amd/analysis_${analysis}"
+    detector="${gpuscout_dir}/analysis_amd/parser_amdgcn_${analysis}"
     detector_start=$(date +%s.%N)
 
-    if "$detector" "$assembly" --detect-only; then
+    if "$detector" "$assembly"; then
       detector_rc=0
     else
       detector_rc=$?
@@ -51,10 +55,6 @@ if [ -z "${analysis_arg:-}" ]; then
       exit "$detector_rc"
     fi
   done
-
-  end_static_detect=$(date +%s.%N)
-  static_detect_time=$(awk "BEGIN {print $end_static_detect - $start_static_detect}")
-
   echo "Static detection time of selected analyses: ${selected_static_detect_time}s"
 else
   #### Manual mode ####
@@ -64,8 +64,22 @@ else
   enabled_analyses=("${parsed_csv_list[@]}")
   echo "AMD analysis selection mode: manual"
 
-  static_detect_time=0
+  for analysis in "${enabled_analyses[@]}"; do
+    parser="${gpuscout_dir}/analysis_amd/parser_amdgcn_${analysis}"
+
+    if ! "$parser" "$assembly"; then
+      parser_rc=$?
+      # Generate the static JSON required by each manually selected analysis.
+      # Do not use the detection outcome to alter enabled_analyses.
+      if [ "$parser_rc" -ne 1 ]; then
+        echo "ERROR: Static parser failed for $analysis." >&2
+        exit "$parser_rc"
+      fi
+    fi
+  done
 fi
+end_static_detect=$(date +%s.%N)
+static_detect_time=$(awk "BEGIN {print $end_static_detect - $start_static_detect}")
 
 echo "Selected AMD analyses: $(join_by_comma "${enabled_analyses[@]}")"
 
@@ -94,7 +108,7 @@ if [ "$automatic_mode" = true ]; then
       else
         kernel_analyses["$kernel"]+=" $analysis"
       fi
-    done < <( jq -r '.candidate_kernels[]' "$static_result_file")
+    done < <( jq -r '.candidate_kernels[].demangled' "$static_result_file")
   done
 
   echo "==== Candidate kernel analysis mapping"

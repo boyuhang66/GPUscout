@@ -1,4 +1,3 @@
-#include "parser_amdgcn_register_spilling.hpp"
 #include "parser_liveregisters.hpp"
 #include "parser_metrics.hpp"
 #include "amd_helper.hpp"
@@ -11,80 +10,6 @@
 
 using json = nlohmann::json;
 
-/*!
- * Build the part of the final register-spilling result that can already be determined from static AMDGCN assembly analysis.
- * The JSON structure intentionally matches the existing final output structure. 
- * Dynamic information such as register pressure is added later.
- */
-json build_static_register_spilling_result(const std::unordered_map<std::string, std::vector<mem>>& mem_map)
-{
-    json result;
-
-    for (const auto& [krn_name, mem_vec] : mem_map)
-    {
-        json krn_result = {
-            {"occurrences", json::array()}
-        };
-
-        // TODO: check if this is happening
-        if (krn_name == "")
-        {
-            break;
-        }
-
-        for (const auto& mem_obj : mem_vec)
-        {
-            if (mem_obj.type != WRITE && mem_obj.type != STORE)
-            {
-                continue;
-            }
-
-            json line_result = {
-                {"file_name", mem_obj.loc.file_name},
-                {"line_number", mem_obj.loc.line_num},
-                {"pc_offset", mem_obj.PC_offset},
-                {"instruction", mem_obj.name},
-                {"register", mem_obj.reg_num},
-                {"operation", mem_obj.type}
-            };
-
-            if (mem_obj.successor == true)
-            {
-                line_result["previous_compute_instruction"] = {
-                    {"instruction", mem_obj.fst.name},
-                    {"file_name", mem_obj.fst.loc.file_name},
-                    {"line_number", mem_obj.fst.loc.line_num}/*,
-                    {"pc_offset", 0} // TODO pc_offset*/
-                };
-            }
-             krn_result["occurrences"].push_back(line_result);
-        }
-
-        result[krn_name] = krn_result;
-    }
-
-    return result;
-}
-
-/*!
- * Return true if at least one register-spilling occurrence was found during static analysis.
- */
-bool has_register_spilling_candidate(const json& result)
-{
-    for (const auto& [krn_name, krn_result] : result.items())
-    {
-        if (!krn_result["occurrences"].empty())
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/*!
- * Enrich the previously generated static result with dynamic information and print the complete analysis result to the terminal.
- */
 json analysis_register_spilling (
     json result,
     std::unordered_map<std::string, mtc> mtc_map,
@@ -102,7 +27,7 @@ json analysis_register_spilling (
             continue;
         }
 
-	    std::cout << std::endl;
+        std::cout << std::endl;
         std::cout << "======================================================================"
                   << "================================" << std::endl;
         std::cout << "==== analysis    : register spilling" << std::endl;
@@ -156,7 +81,14 @@ json analysis_register_spilling (
         }
 
         // Metrics
-        auto mtc_obj = mtc_map[krn_name];
+        // Avoid implicitly inserting a default metric record when this kernel has no parsed metrics.
+        const auto metric_it = mtc_map.find(krn_name);
+        if (metric_it == mtc_map.end())
+        {
+            std::cerr << "ERROR: Missing metrics for kernel " << krn_name << std::endl;
+            continue;
+        }
+        const auto& mtc_obj = metric_it->second;
 
         auto approx_percent = mtc_obj.ID_17_3_1 ? mtc_obj.ID_15_2_5/*mtc_obj.ID_15_1_9*/ * mtc_obj.ID_16_3_5 / mtc_obj.ID_17_3_1 : 0.0;
 
@@ -183,83 +115,54 @@ json analysis_register_spilling (
 
 int main(int argc, char **argv)
 {
-    std::string assembly = argv[1];
-    const auto static_result_file = static_result_path(assembly, "register_spilling");
-
-    /*! Static detection mode:
-     *
-     *  1. Parse AMDGCN assembly.
-     *  2. Build the static part of the final analysis result.
-     *  3. If a candidate exists, preserve the result for the later full-analysis stage.
-     *
-     *  exit 0 -> register spilling detected
-     *  exit 1 -> no register spilling detected
-     *  exit 2 -> error
-     */
-    if (argc == 3 && std::strcmp(argv[2], "--detect-only") == 0)
-    {
-        auto mem_map = parser_register_spilling(assembly);
-
-        json result = build_static_register_spilling_result(mem_map);
-        if (!has_register_spilling_candidate(result))
-        {
-            return 1;
-        }
-
-        if (!save_static_result(static_result_file, result))
-        {
-            std::cerr << "ERROR: Could not save static register spilling result to "
-                      << static_result_file << std::endl;
-            return 2;
-        }
-
-        return 0;
-    }
-        
     /*! Full analysis mode:
      *  exit 0 -> successful analysis
+     *  exit 1 -> invalid static result
      *  exit 2 -> invalid arguments
      */
-    if (argc < 6)
+    if (argc != 6)
     {
-        std::cerr << "ERROR: Invalid arguments for register spilling analysis."
-                  << std::endl;
+        std::cerr << "Usage: " << argv[0]
+                  << " <assembly-file> <metrics-dir> <livereg-dir> <save-as-json> <json-output-dir>\\n";
         return 2;
     }
 
+    const std::string assembly = argv[1];
+    const auto static_result_file = static_result_path(assembly, "register_spilling");
+
     json result;
-    /*
-     * Automatic mode: reuse the static result generated during detection.
-     * Manual mode: no static result exists, therefore perform the original assembly parsing here.
-     */
     if (!load_static_result(static_result_file, result))
     {
-        auto mem_map = parser_register_spilling(assembly);
-        result = build_static_register_spilling_result(mem_map);
+        std::cerr << "ERROR: Missing or invalid static register spilling result: "
+                  << static_result_file << std::endl;
+        return 1;
     }
 
+    // TODO PC stalls
 
-    //TODO PC stalls
-
-    std::string mtc_dir = argv[2];
-    auto mtc_map = parser_metrics(mtc_dir, assembly);
+    const std::string mtc_dir = argv[2];
+    const auto mtc_map = parser_metrics(mtc_dir, assembly);
 
     // live registers
-    std::string livereg_dir = argv[3];
-    std::unordered_map<std::string, std::vector<live_registers>> live_register_map = live_registers_analysis(livereg_dir, assembly);
+    const std::string livereg_dir = argv[3];
+    const auto live_register_map = live_registers_analysis(livereg_dir, assembly);
 
-    bool save_as_json = std::strcmp(argv[4], "true") == 0;
-    std::string json_out_dir = argv[5];
+    const bool save_as_json = std::strcmp(argv[4], "true") == 0;
+    const std::string json_out_dir = argv[5];
 
     result = analysis_register_spilling(result, mtc_map, live_register_map);
 
     if (save_as_json)
     {
-        std::ofstream json_file;
-        json_file.open(json_out_dir + "/register_spilling.json");
+        std::ofstream json_file(json_out_dir + "/register_spilling.json");
+        if (!json_file)
+        {
+            std::cerr << "ERROR: Could not write register_spilling.json" << std::endl;
+            return 2;
+        }
         json_file << result.dump(4);
-        json_file.close();
     }
 
     return 0;
 }
+

@@ -46,7 +46,7 @@ usage() {
       echo "  --analysis : (AMD) Comma-separated analysis IDs to run. Valid IDs: "
       echo "              register_spilling,restrict,vectorized_load,atomic_instruction,"
       echo "              wavefront_divergence,shared_memory,datatype_conversion,deadlock_detection."
-      echo "              If omitted, all analyses are enabled."
+      echo "              If omitted, analyses will be selected automatically based on static detection results."
     fi
     exit 1
 }

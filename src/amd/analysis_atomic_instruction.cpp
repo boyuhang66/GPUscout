@@ -1,131 +1,9 @@
-#include "parser_amdgcn_atomic_instruction.hpp"
 #include "parser_metrics.hpp"
 #include "amd_helper.hpp"
 #include "../utilities/json.hpp"
 #include <iostream>
 
 using json = nlohmann::json;
-
-/*!
- * Build the reusable static result for the atomic-instruction analysis.
- * "result" contains the information that belongs to the existing final global_atomics.json output.
- * "metadata" contains internal information required by later pipeline stages and is not be written to the final JSON output.
- */
-json build_static_atomic_instruction_result(const std::unordered_map<std::string, atom>& atom_map,
-                                            const std::unordered_map<std::string, std::vector<brc>>& brc_map)
-{
-    json static_result = {
-        {"result", json::object()},
-        {"metadata", json::object()}
-    };
-
-    for (const auto& [krn_name, atom_obj] : atom_map)
-    {
-        // TODO check if this is happening
-        if (krn_name == "")
-        {
-            break;
-        }
-
-        json krn_result = {
-            {"occurrences", json::array()},
-            {"shared_atomics", atom_obj.num_s}
-        };
-
-        json occurrence_metadata = json::array();
-
-        // for every occurring global atomic instruction in the kernel
-        for (const auto& gbl_atom_obj : atom_obj.gbl_atom)
-        {
-            bool inside_loop = false;
-            // loop through all branch instructions in the kernel
-            auto brc_it = brc_map.find(krn_name);
-            if (brc_it != brc_map.end())
-            {
-                for (const auto& brc_obj : brc_it->second)
-                {
-                    if (brc_obj.tgt == gbl_atom_obj.brc &&
-                        std::stoi(brc_obj.PC_offset) > std::stoi(gbl_atom_obj.PC_offset) &&
-                        brc_obj.loop)
-                    {
-                        inside_loop = true;
-                    }
-                }
-            }
-
-            krn_result["occurrences"].push_back({
-                    {"severity", "INFO"},
-                    {"file_name", gbl_atom_obj.loc.file_name},
-                    {"line_number", gbl_atom_obj.loc.line_num},
-                    {"in_for_loop", inside_loop},
-                    {"is_global", true},
-            });
-
-            // Internal information corresponding to the occurrence at the same array index.
-            occurrence_metadata.push_back({
-                {"pc_offset", gbl_atom_obj.PC_offset}
-            });
-        }
-
-        // Shared atomic instructions
-        for (const auto &shr_atom_obj : atom_obj.shr_atom)
-        {
-            bool inside_loop = false;
-            
-            auto brc_it = brc_map.find(krn_name);
-            if (brc_it != brc_map.end())
-            {
-
-                // loop through all branch instructions in the kernel
-                for (const auto& brc_obj : brc_it->second)
-                {
-                    if (brc_obj.tgt == shr_atom_obj.brc &&
-                        std::stoi(brc_obj.PC_offset) > std::stoi(shr_atom_obj.PC_offset) &&
-                        brc_obj.loop)
-                    {
-                        inside_loop = true;
-                    }
-                }
-            }
-
-            krn_result["occurrences"].push_back({
-                    {"severity", "INFO"},
-                    {"file_name", shr_atom_obj.loc.file_name},
-                    {"line_number", shr_atom_obj.loc.line_num},
-                    {"in_for_loop", inside_loop},
-                    {"is_global", false},
-            });
-
-            // Internal information corresponding to the occurrence at the same array index.
-            occurrence_metadata.push_back({
-                {"pc_offset", shr_atom_obj.PC_offset}
-            });
-        }
-
-        static_result["result"][krn_name] = krn_result;
-        static_result["metadata"][krn_name] = {
-            {"global_atomics", atom_obj.num_g},
-            {"occurrence_metadata", occurrence_metadata}
-        };
-    }
-
-    return static_result;
-}
-
-/*!
- * Return true if at least one atomic instruction occurrence was found during static analysis.
- */
-bool has_atomic_instruction_candidate(const json& static_result)
-{
-    for (const auto& [krn_name, krn_result] : static_result["result"].items())
-    {
-        if (!krn_result["occurrences"].empty())
-        {
-            return true;
-        }
-    }
-    return false;
-}
 
 json analysis_atomic_instruction(
     json static_result,
@@ -219,7 +97,14 @@ json analysis_atomic_instruction(
         // TODO PC stall
 
         // Metrics
-        auto mtc_obj = mtc_map[krn_name];
+        // Avoid implicitly inserting a default metric record when this kernel has no parsed metrics.
+        const auto metric_it = mtc_map.find(krn_name);
+        if (metric_it == mtc_map.end())
+        {
+            std::cerr << "ERROR: Missing metrics for kernel " << krn_name << std::endl;
+            continue;
+        }
+        const auto& mtc_obj = metric_it->second;
 
 	    std::cout << std::endl;
         std::cout << "==== INFO" << std::endl;
@@ -250,65 +135,27 @@ json analysis_atomic_instruction(
 
 int main(int argc, char **argv)
 {
-    std::string assembly = argv[1];
-
-    const auto static_result_file = static_result_path(assembly, "atomic_instruction");
-
-    /*! Static detection mode:
-     *
-     *  1. Parse AMDGCN assembly.
-     *  2. Build the static part of the final analysis result.
-     *  3. If a candidate exists, preserve the result for the later full-analysis stage.
-     *
-     *  exit 0 -> atomic instruction detected
-     *  exit 1 -> no atomic instruction detected
-     *  exit 2 -> error
-     */
-    if (argc == 3 && std::strcmp(argv[2], "--detect-only") == 0)
-    {
-        auto tuple = parser_atomic_instruction(assembly);
-        auto atom_map = std::get<0>(tuple);
-        auto lbl_map = std::get<1>(tuple);
-
-        json static_result = build_static_atomic_instruction_result(atom_map, lbl_map);
-        if (!has_atomic_instruction_candidate(static_result))
-        {
-            return 1;
-        }
-
-        if (!save_static_result(static_result_file, static_result))
-        {
-            std::cerr << "ERROR: Could not save static atomic instruction result to "
-                      << static_result_file << std::endl;
-            return 2;
-        }
-
-        return 0;
-    }
-
     /*! Full analysis mode:
      *  exit 0 -> successful analysis
-     *  exit 2 -> invalid arguments
+     *  exit 1 -> invalid static result
+     *  exit 2 -> invalid arguments 
      */
-    if (argc < 5)
+    if (argc != 5)
     {
-        std::cerr << "ERROR: Invalid arguments for atomic instruction analysis."
-                  << std::endl;
+        std::cerr << "Usage: " << argv[0]
+                  << " <assembly-file> <metrics-dir> <save-as-json> <json-output-dir>\\n";
         return 2;
     }
 
+    std::string assembly = argv[1];
+    const auto static_result_file = static_result_path(assembly, "atomic_instruction");
+
     json static_result;
-    /*
-     * Automatic mode: reuse the static result generated during detection.
-     * Manual mode: no static result exists, therefore perform the original assembly parsing here.
-     */
     if (!load_static_result(static_result_file, static_result))
     {
-        auto tuple = parser_atomic_instruction(assembly);
-        auto atom_map = std::get<0>(tuple);
-        auto lbl_map = std::get<1>(tuple);
-
-        static_result = build_static_atomic_instruction_result(atom_map, lbl_map);
+        std::cerr << "ERROR: Missing or invalid static atomic instruction result: "
+                  << static_result_file << std::endl;
+        return 1;
     }
 
     std::string mtc_dir = argv[2];

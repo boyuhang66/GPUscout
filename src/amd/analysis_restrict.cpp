@@ -1,70 +1,9 @@
-#include "parser_amdgcn_restrict.hpp"
 #include "parser_metrics.hpp"
 #include "parser_liveregisters.hpp"
 #include "amd_helper.hpp"
 #include "../utilities/json.hpp"
 
 using json = nlohmann::json;
-
-/*!
- * Build the reusable static result for the __restrict__ analysis.
- * All static information required by the final restrict.json output is already contained in "result"
- */
-json build_static_restrict_result(const std::unordered_map<std::string, std::vector<reg>>& reg_map)
-{
-    json static_result = {
-        {"result", json::object()}
-    };
-
-    for (const auto& [krn_name, reg_vec] : reg_map)
-    {
-        // TODO: check if this is happening
-        if (krn_name.empty())
-        {
-            break;
-        }
-
-        json krn_result = {
-            {"occurrences", json::array()}
-        };
-
-        for (const auto& reg_obj : reg_vec)
-        {
-            if (reg_obj.is_used)
-            {
-                continue;
-            }
-
-            krn_result["occurrences"].push_back({
-                {"severity", "INFO"},
-                {"pc_offset", reg_obj.PC_offset},
-                {"file_name", reg_obj.loc.file_name},
-                {"line_number", reg_obj.loc.line_num},
-                {"register", reg_obj.reg_num}
-            });
-        }
-
-        static_result["result"][krn_name] = krn_result;
-    }
-
-    return static_result;
-}
-
-/*!
- * Return true if at least one register could benefit from __restrict__.
- */
-bool has_restrict_candidate(const json& static_result)
-{
-    for (const auto& [krn_name, krn_result] : static_result["result"].items())
-    {
-        if (!krn_result["occurrences"].empty())
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
 
 json analysis_restrict(
     json static_result,
@@ -75,7 +14,7 @@ json analysis_restrict(
 
     for (auto& [krn_name, krn_result] : result.items())
     {
-	    std::cout << std::endl;
+        std::cout << std::endl;
         std::cout << "======================================================================"
                   << "================================" << std::endl;
         std::cout << "==== analysis    : __restrict__" << std::endl;
@@ -135,61 +74,28 @@ json analysis_restrict(
 
 int main(int argc, char **argv)
 {
-    std::string assembly = argv[1];
-
-    const auto static_result_file = static_result_path(assembly, "restrict");
-
-    /*! Static detection mode:
-     *
-     *  1. Parse AMDGCN assembly.
-     *  2. Build the reusable static result.
-     *  3. Detect whether a __restrict__ candidate exists.
-     *  4. Preserve the result for the later full-analysis stage.
-     *
-     *  exit 0 -> restrict candidate detected
-     *  exit 1 -> no restrict candidate detected
-     *  exit 2 -> error
-     */
-    if (argc == 3 && std::strcmp(argv[2], "--detect-only") == 0)
-    {
-        auto reg_map = parser_restrict(assembly);
-
-        json static_result = build_static_restrict_result(reg_map);
-        if (!has_restrict_candidate(static_result))
-        {
-            return 1;
-        }
-
-        if (!save_static_result(static_result_file, static_result))
-        {
-            std::cerr << "ERROR: Could not save static restrict result to "
-                      << static_result_file << std::endl;
-            return 2;
-        }
-
-        return 0;
-    }
-
     /*! Full analysis mode:
      *  exit 0 -> successful analysis
+     *  exit 1 -> invalid static result
      *  exit 2 -> invalid arguments
      */
-    if (argc < 6)
+    if (argc != 6)
     {
-        std::cerr << "ERROR: Invalid arguments for restrict analysis." << std::endl;
+        std::cerr << "Usage: " << argv[0]
+                  << " <assembly-file> <metrics-dir> <livereg-dir> <save-as-json> <json-output-dir>\\n";
         return 2;
     }
 
+    const std::string assembly = argv[1];
+    const auto static_result_file = static_result_path(assembly, "restrict");
+
     json static_result;
-    /*
-     * Automatic mode: reuse the static result generated during detection.
-     * Manual mode: no static result exists, therefore perform the original assembly parsing here.
-     */
     if (!load_static_result(static_result_file, static_result))
     {
-        auto reg_map = parser_restrict(assembly);
-        static_result = build_static_restrict_result(reg_map);
+        std::cerr << "ERROR: Missing or invalid static restrict result: " << static_result_file << std::endl;
+        return 1;
     }
+    
     std::string mtc_dir = argv[2];
     auto mtc_map = parser_metrics(mtc_dir, assembly);
 
@@ -209,4 +115,5 @@ int main(int argc, char **argv)
         json_file << result.dump(4);
         json_file.close();
     }
+    return 0;
 }
