@@ -280,6 +280,42 @@ else
 fi
 
 ########################################################################
+# Collect PC-Sampling Stall Information
+########################################################################
+# These analyses consume PC-sampling stall information during merge.
+pc_sampling_analyses=(
+    register_spilling
+    use_restrict
+    vectorization
+    global_atomics
+    warp_divergence
+    use_texture
+    use_shared
+)
+
+pc_sampling_required=false
+for kernel in "${selected_candidate_kernels[@]}"; do
+    for analysis in ${kernel_analyses[$kernel]:-}; do
+        if array_contains "${analysis}" "${pc_sampling_analyses[@]}"; then
+            pc_sampling_required=true
+            break 2
+        fi
+    done
+done
+
+pcsampling_time=0
+if [ "${dry_run}" = false ] && [ "${pc_sampling_required}" = true ]; then
+    echo "Getting warp stall reasons . . . . . . . . . . . . . . . "
+    start_pcsampling=$(date +%s.%N)
+    source "${gpuscout_dir}/sampling_utilities/generate_sampling_stalls.sh"
+    cp ${gpuscout_dir}/sampling_utilities/sampling_utility/pcsampling_${run_prefix}.txt ${gpuscout_tmp_dir}/pcsampling_${run_prefix}.txt
+    end_pcsampling=$(date +%s.%N)
+    pcsampling_time=$(awk "BEGIN {print $end_pcsampling - $start_pcsampling}")
+else
+    echo "Skipping PC sampling: no selected candidate analysis requires stall samples."
+fi
+
+########################################################################
 # Build Metric Requirements
 ########################################################################
 # Per-analysis metric requirements (must match parser_metrics.hpp names).
