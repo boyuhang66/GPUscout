@@ -282,22 +282,6 @@ fi
 ########################################################################
 # Build Metric Requirements
 ########################################################################
-# Build a comma-separated metric list for NCU (de-duplicated).
-# If `json=true`, include metrics needed by JSON export as well.
-_metrics_set=()
-_add_metrics () {
-    local m
-    for m in "$@"; do
-        if ! array_contains "$m" "${_metrics_set[@]}"; then
-            _metrics_set+=("$m")
-        fi
-    done
-}
-_metrics_csv () { # Output the metrics as a comma-separated string for NCU
-    local IFS=,
-    printf '%s' "${_metrics_set[*]}"
-}
-
 # Per-analysis metric requirements (must match parser_metrics.hpp names).
 # Register spilling (includes load_data_memory_flow helper metrics)
 _metrics_register_spilling=(
@@ -426,27 +410,6 @@ _metrics_json_export=(
             smsp__warp_issue_stalled_mio_throttle_per_warp_active.pct
             smsp__warp_issue_stalled_tex_throttle_per_warp_active.pct
         )
-
-for analysis in "${enabled_analyses[@]}"; do
-    if [ "${analysis}" = "deadlock_detection" ]; then
-        continue
-    fi
-
-    if ! array_contains "${analysis}" "${valid_analyses[@]}"; then
-        echo "ERROR: Unknown analysis name in enabled_analyses: $analysis"
-        exit 1
-    fi
-
-    array_name="_metrics_${analysis}"
-    declare -n current_metrics="${array_name}"
-
-    _add_metrics "${current_metrics[@]}"
-done
-
-if [ "$json" = true ]; then
-    _add_metrics "${_metrics_json_export[@]}"
-fi
-
 ########################################################################
 # Build Per-Kernel Metric Requirements
 ########################################################################
@@ -524,12 +487,6 @@ done
 ########################################################################
 # Metric Collection
 ########################################################################
-metrics_csv="$(_metrics_csv)" # This is the final comma-separated metric list to pass to NCU. It is de-duplicated and includes all metrics needed by the selected analyses and JSON export (if enabled).
-ncu_metrics_required=false
-if [ -n "${metrics_csv}" ]; then
-    ncu_metrics_required=true
-fi
-
 if [ "$dry_run" = false ]; then
     if [ "$ncu_metrics_required" = true ]; then
         echo "Collecting NCU metrics . . . . . . . . . . . . . . . "
@@ -543,7 +500,16 @@ if [ "$dry_run" = false ]; then
         rm -f "${metrics_out}"
 
         for kernel in "${ncu_collection_kernels[@]}"; do
+        # Collect only the metrics required by the analyses detected for this kernel. 
             echo "Profiling NCU metrics for kernel pattern: ${kernel}"
+            kernel_metrics_list="${kernel_metrics[$kernel]:-}"
+            if [ -z "${kernel_metrics_list}" ]; then
+                echo "Skipping kernel with no required NCU metrics: ${kernel}"
+                continue
+            fi
+             # Convert the internal space-separated list to the comma-separated format expected by NCU.
+            kernel_metrics_csv="${kernel_metrics_list// /,}"
+
             tmp_csv="$(mktemp)"
 
             # skip warmup iterations to get more accurate metrics for the steady-state execution of the kernel
@@ -552,7 +518,7 @@ if [ "$dry_run" = false ]; then
                 "${ncu_kernel_base_args[@]}" \
                 --kernel-name "${kernel}" \
                 --launch-count 1 \
-                --metrics "${metrics_csv}" \
+                --metrics "${kernel_metrics_csv}" \
                 ${executable} ${args}
             # ncu -f --csv --log-file "${tmp_csv}" --print-units base --print-kernel-base mangled \
             #     "${ncu_kernel_base_args[@]}" \
