@@ -384,7 +384,7 @@ json build_static_use_texture_result(const std::unordered_map<std::string, std::
                     // if this second read is not present, there might not be any use of texture memory for that case. Global memory should be sufficient then
                     multiple_reads_register_flag = (j == 0) ? false : true;
                 }
-                bool texture_recommend_flag = false;
+                texture_recommend_flag = true;
                 kernel_result["occurrences"].push_back({
                     {"severity", "WARNING"},
                     {"line_number", index_sass.line_number},
