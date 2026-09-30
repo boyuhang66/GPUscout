@@ -717,18 +717,20 @@ elif [ "$vendor" = "amd" ]; then
 
     # creating object file
     echo "==== creating object file"
-    roc-obj-ls -v "${executable}" | \
-    awk '/amdgcn/{print $3}' | \
-    roc-obj-extract -o
-    #roc-obj-ls -v "${executable}" | \
-    #awk '/gfx90a/{print $3}' | \
-    #roc-obj-extract -o
+    # roc-obj-ls -v "${executable}" | \
+    # awk '/amdgcn/{print $3}' | \
+    # roc-obj-extract -o
+    bundle_uri=$(llvm-readobj --offloading "${executable}" | awk '/amdgcn/{print $2}')
+    llvm-objcopy --dump-offload-bundle="$bundle_uri"
 
-    object_file=$(find "$gpuscout_tmp_dir" -type f -name "*.co")
+    tmp_file=$(find "$(dirname "$executable")" -type f -name "*.co")
+    object_file="$gpuscout_tmp_dir/${executable_filename}.co"
+    mv "$tmp_file" "$object_file"
     echo "TMP: $gpuscout_tmp_dir"
 
     # Extracting mcpu name / LLVM target name
-    llvm_target_name=$(roc-obj-ls -v "${executable}" | \
+    # llvm_target_name=$(roc-obj-ls -v "${executable}" | \
+    llvm_target_name=$(llvm-readobj --offloading "${executable}" | \
     awk '/amdgcn/ {match($0, /gfx[0-9a-f]+/); print substr($0, RSTART, RLENGTH)}')
 
 
