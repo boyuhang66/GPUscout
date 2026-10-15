@@ -2,21 +2,21 @@
 # This script is used to collect dynamic profiling data for AMD GPUs using rocprof-compute and perform various analyses on the collected data.
 echo "======================================================================================================"
 ########################################################################
-# Analysis on assmble files 
+# Static parsing and analysis selection 
 ########################################################################
+echo "==== Static parsing and analysis selection"
 if [ ! -s "$assembly" ]; then
     echo "ERROR: AMD assembly file was not created or is empty: $assembly" >&2
     exit 2
 fi
+
 automatic_mode=false
-if [ -z "${analysis_arg:-}" ]; then
+if [ -z "${analysis_arg:-}" ]; then # if no analyses were specified, use automatic mode
   #### Automatic mode ####
   # enable analyses only when their static bottleneck occurrence has been detected.
   automatic_mode=true
-  enabled_analyses=()
-  echo "AMD analysis selection mode: automatic (static-triggered)"
-
-  static_detect_analyses=(
+  echo "==== AMD analysis selection mode: automatic (static-triggered)"
+   requested_analyses=(
     register_spilling
     atomic_instruction
     datatype_conversion
@@ -58,7 +58,7 @@ if [ -z "${analysis_arg:-}" ]; then
   echo "Static detection time of selected analyses: ${selected_static_detect_time}s"
 else
   #### Manual mode ####
-  # the existing CLI-based bottleneck analysis selection.
+  # only do the selected bottlenecks parser.
   automatic_mode=false
   parse_csv_list "${analysis_arg}" "analysis"
   enabled_analyses=("${parsed_csv_list[@]}")
@@ -140,7 +140,8 @@ done
 mkdir -p "$livereg_dir"
 livereg_time=0
 if [ "$livereg_required" = true ]; then
-  echo "==== creating file containing register pressure information "
+  echo "======================================================================================================"
+  echo "==== Creating file containing register pressure information "
   start_livereg=$(date +%s.%N)
   "$rga" -s bin --livereg livereg/9_73_23_42_${executable_filename}-vgpr.txt --co "$object_file" # 9_73_23_42 to make kernel name extraction easier
   "$rga" -s bin --livereg-sgpr livereg/9_73_23_42_${executable_filename}-sgpr.txt --co "$object_file"
@@ -151,7 +152,7 @@ else
 fi
 
 ########################################################################
-# Build metric requirements
+# Build metric requirements && Metric profiling
 ########################################################################
 if [ "$dry_run" = false ]; then
   # The IDs must match the fields parsed in parser_metrics.hpp
@@ -192,7 +193,8 @@ if [ "$dry_run" = false ]; then
     10.2.14 # Type conversion instructions issued to the VALU per kernel
   )
   _metrics_deadlock_detection=()
-  _metrics_json_export=(
+  # TODO: Review whether the following metrics are really required for the data flow graph analysis. They are currently included because they are used by the GUI to visualize the data flow graph.
+  _metrics_data_flow_graph=(
     7.2.4
     10.1.6
     10.2.14
@@ -544,12 +546,12 @@ if [ "$dry_run" = false ]; then
 ########################################################################
 # PC Stall Sampling
 ########################################################################
+  echo "======================================================================================================"
+  echo "==== Collecting PC sampling data"
   ##### Creating file containing PC sampling data when supported by the gpu TODO Could be moved into metrics collection when pc sampling works without problems #####
   stochastic_gpus=$(rocprofv3 -L | grep -A 7 "GPU\s*:" | grep  "Method\s*:\s*stochastic")
   stochastic_gpus="" # TODO remove when rocprof-compute bug is fixed - doesnt collect data right now and data fields are just empty
   if [ -n "$stochastic_gpus" ]; then
-      echo "==== collecting PC sampling data"
-    
       start_pcsampling=$(date +%s.%N)
       mkdir pc_samples
       # Collect pc sampling data with the command from the docs - 128 cycles because nvidia version uses the same amount
@@ -595,6 +597,8 @@ args_datatype_conversion=("${assembly}" "${metrics_dir}" "${json}" "${gpuscout_o
 args_deadlock_detection=("${assembly}" "${json}" "${gpuscout_output_dir}")
 
 start_analysis=$(date +%s.%N)
+echo "======================================================================================================"
+echo "==== Performing AMD merge analyses"
 
 if [ "$performance_mode" = false ]; then
   # Time a command (wall clock) and print duration.
@@ -714,9 +718,8 @@ echo "All AMD analyses completed successfully."
 
 # output all used files in JSON format
 if [ "$json" = true ]; then
-
     echo "======================================================================================================"
-    echo "==== generating JSON output"
+    echo "==== Generating JSON output"
     # ./save_to_json ${gpuscout_output_dir} ${gpuscout_tmp_dir}/result-${run_prefix} ${gpuscout_tmp_dir}/nvdisasm-executable-${executable_filename}-sass.txt ${gpuscout_tmp_dir}/nvdisasm-registers-executable-${executable_filename}-sass.txt ${gpuscout_tmp_dir}/nvdisasm-executable-${executable_filename}-ptx.txt ${gpuscout_tmp_dir}/pcsampling_${executable_filename}.txt
     ./save_to_json ${gpuscout_output_dir} ${gpuscout_tmp_dir}/result-${run_prefix} "${assembly}" "${metrics_dir}" "$livereg_dir"
 fi
@@ -726,14 +729,14 @@ analysis_time=$(awk "BEGIN {print $end_analysis - $start_analysis}")
 
 echo "======================================================================================================"
 echo "Time for Static Preparation:     ${static_prep_time}s"
-echo "Time for Static Detection:       ${static_detect_time}s"
+echo "Time for Static Parsing:       ${static_parser_time}s"
 echo "Time for Live Register Analysis: ${livereg_time}s"
 if [ "$dry_run" = false ]; then
     echo "Time for PC Sampling:          ${pcsampling_time}s"
     echo "Time for Metrics Collection:   ${metrics_time}s"
 fi
 echo "Time for Merging Analysis:     ${analysis_time}s"
-echo "Total Time:                    $(awk "BEGIN {print $static_prep_time + $static_detect_time + $livereg_time + $pcsampling_time + $metrics_time + $analysis_time}")s"
+echo "Total Time:                    $(awk "BEGIN {print $static_prep_time + $static_parser_time + $livereg_time + $pcsampling_time + $metrics_time + $analysis_time}")s"
 echo "======================================================================================================"
 
 cd ..

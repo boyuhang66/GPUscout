@@ -716,7 +716,7 @@ elif [ "$vendor" = "amd" ]; then
     start_static_prep=$(date +%s.%N)
 
     # creating object file
-    echo "==== creating object file"
+    echo "==== Creating object file"
     # roc-obj-ls -v "${executable}" | \
     # awk '/amdgcn/{print $3}' | \
     # roc-obj-extract -o
@@ -752,8 +752,7 @@ elif [ "$vendor" = "amd" ]; then
     fi
     
     # creating assembly file
-    echo "==== creating assembly file"
-
+    echo "==== Creating assembly file"
     echo "Object File: $object_file, Executable File: ${executable_filename}, LLVM Target: ${llvm_target_name}"
     #llvm-objdump -d --mcpu=gfx90a --source -l -C --symbolize-operands "$object_file" > "${executable_filename}".s
     llvm-objdump -d --mcpu="${llvm_target_name}" --source -l --symbolize-operands "$object_file" > "${executable_filename}".s
@@ -769,6 +768,7 @@ fi
 
 
 # Get the measurements and analysis from the measurements script
+echo "======================================================================================================"
 echo "Measurements and Analysis . . . . . . . . . . . . . . . (${gpuscout_dir}/analysis_$vendor/measurements.sh)"
 source ${gpuscout_dir}/analysis_$vendor/measurements.sh
 
@@ -777,6 +777,7 @@ echo -e "Profiling complete! Starting cleanup . . . . . . . . . . . . . . . . . 
 
 # TODO: uncomment this line when debugging
 rm -rf ${gpuscout_output_dir}
+rm -rf ${gpuscout_tmp_dir}/*_tmp_outputs
 
 # Remove the PC sampling files generate before release/production, else keep them for debug
 # rm $PWD/sampling_utilities/sampling_continuous/*_pcsampling_*.dat
