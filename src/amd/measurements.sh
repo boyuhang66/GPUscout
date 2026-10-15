@@ -149,37 +149,29 @@ echo "Enabled AMD analyses: $(join_by_comma "${enabled_analyses[@]}")"
 #### Build candidate kernel->analyses mapping ####
 candidate_kernels=()
 declare -A kernel_analyses=()
-if [ "$automatic_mode" = true ]; then
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "ERROR: jq is required to read AMD static analysis results." >&2
+if ! command -v jq >/dev/null 2>&1; then
+  echo "ERROR: jq is required to read AMD static analysis results." >&2
+  exit 1
+fi
+
+for analysis in "${enabled_analyses[@]}"; do
+  static_result_file="${gpuscout_tmp_dir}/static_results/${analysis}.json"
+  if [ ! -s "$static_result_file" ]; then
+    echo "ERROR: Missing static result for analysis: $analysis" >&2
     exit 1
   fi
 
-  for analysis in "${enabled_analyses[@]}"; do
-    static_result_file="${gpuscout_tmp_dir}/static_results/${analysis}.json"
-    if [ ! -s "$static_result_file" ]; then
-      echo "ERROR: Missing static result for analysis: $analysis" >&2
-      exit 1
+  while IFS= read -r kernel; do
+    [ -z "$kernel" ] && continue
+    # First time this candidate kernel is encountered.
+    if [ -z "${kernel_analyses[$kernel]+x}" ]; then
+      candidate_kernels+=("$kernel")
+      kernel_analyses["$kernel"]="$analysis"
+    else
+      kernel_analyses["$kernel"]+=" $analysis"
     fi
-
-    while IFS= read -r kernel; do
-      [ -z "$kernel" ] && continue
-      # First time this candidate kernel is encountered.
-      if [ -z "${kernel_analyses[$kernel]+x}" ]; then
-        candidate_kernels+=("$kernel")
-        kernel_analyses["$kernel"]="$analysis"
-      else
-        kernel_analyses["$kernel"]+=" $analysis"
-      fi
-    done < <( jq -r '.candidate_kernels[].demangled' "$static_result_file")
-  done
-
-  echo "==== Candidate kernel analysis mapping"
-  for kernel in "${candidate_kernels[@]}"; do
-    echo "Kernel: $kernel"
-    echo "  analyses: ${kernel_analyses[$kernel]}"
-  done
-fi
+  done < <( jq -r '.candidate_kernels[].demangled' "$static_result_file")
+done
 
 ########################################################################
 # Live Register
@@ -295,112 +287,68 @@ if [ "$dry_run" = false ]; then
     [17.6.10]="TCC"
   )
 
-  if [ "$automatic_mode" = true ]; then
-    #### Automatic mode: build kernel -> metrics mapping ####
-    declare -A kernel_metrics=()
-    _add_kernel_metric()
-    {
-      local kernel="$1"
-      local metric="$2"
-      local current_metrics="${kernel_metrics[$kernel]:-}"
+  declare -A kernel_metrics=()
+  _add_kernel_metric()
+  {
+    local kernel="$1"
+    local metric="$2"
+    local current_metrics="${kernel_metrics[$kernel]:-}"
 
-      # Metric IDs contain no spaces, therefore a space-separated list is sufficient here.
-      case " $current_metrics " in
-        *" $metric "*)
-          ;;
-        *)
-          if [ -n "$current_metrics" ]; then
-            kernel_metrics["$kernel"]+=" $metric"
-          else
-            kernel_metrics["$kernel"]="$metric"
-          fi
-          ;;
-      esac
-    }
-    # Add all metrics required by one analysis to the metric set of one kernel.
-    # target_array_name contains the NAME of an analysis-specific metric array,
-    # e.g. "_metrics_register_spilling".
-    _add_analysis_metrics_to_kernel()
-    {
-      local target_kernel="$1"
-      local target_array_name="$2"
-      # target_array_name="_metrics_register_spilling"
-      # metrics_ref -> _metrics_register_spilling
-      local -n metrics_ref="$target_array_name"
-      local metric
-
-      for metric in "${metrics_ref[@]}"; do
-        _add_kernel_metric "$target_kernel" "$metric"
-      done
-    }
-
-    for kernel in "${candidate_kernels[@]}"; do
-      for analysis in ${kernel_analyses[$kernel]}; do
-        array_name="_metrics_${analysis}"
-        _add_analysis_metrics_to_kernel "$kernel" "$array_name"
-      done
-      # Additional metrics required for JSON output.
-      # These metrics are not needed for bottleneck detection itself, but are required by the GUI. #TODO: should check metrics exported by json is really needed for each kernel
-      if [ "$json" = true ]; then
-        for metric in "${_metrics_json_export[@]}"; do
-          _add_kernel_metric "$kernel" "$metric"
-        done
-      fi
-    done
-
-    echo "==== AMD kernel profiling plan"
-    amd_metrics_required=false
-    for kernel in "${candidate_kernels[@]}"; do
-      echo "Kernel: $kernel"
-      echo "  analyses: ${kernel_analyses[$kernel]}"
-      echo "  metrics : ${kernel_metrics[$kernel]:-(none)}"
-
-      if [ -n "${kernel_metrics[$kernel]:-}" ]; then
-        amd_metrics_required=true
-      fi
-    done
-  else
-    #### Manual mode: Per-analysis metric requirements ####
-    # Build a de-duplicated list of metric IDs required by the enabled analyses.
-    _metrics_set=()
-    _add_metrics()
-    {
-      local metric
-      for metric in "$@"; do
-        if ! array_contains "$metric" "${_metrics_set[@]}"; then
-          _metrics_set+=("$metric")
+    # Metric IDs contain no spaces, therefore a space-separated list is sufficient here.
+    case " $current_metrics " in
+      *" $metric "*)
+        ;;
+      *)
+        if [ -n "$current_metrics" ]; then
+          kernel_metrics["$kernel"]+=" $metric"
+        else
+          kernel_metrics["$kernel"]="$metric"
         fi
-      done
-    }
+        ;;
+    esac
+  }
+  # Add all metrics required by one analysis to the metric set of one kernel.
+  # target_array_name contains the NAME of an analysis-specific metric array,
+  # e.g. "_metrics_register_spilling".
+  _add_analysis_metrics_to_kernel()
+  {
+    local target_kernel="$1"
+    local target_array_name="$2"
+    # target_array_name="_metrics_register_spilling"
+    # metrics_ref -> _metrics_register_spilling
+    local -n metrics_ref="$target_array_name"
+    local metric
 
-    for analysis in "${enabled_analyses[@]}"; do
-      if ! array_contains "${analysis}" "${valid_analyses[@]}"; then
-        echo "ERROR: Unknown analysis name in enabled_analyses: $analysis"
-        exit 1
-      fi
-
-      array_name="_metrics_${analysis}"
-      declare -n current_metrics="${array_name}"
-
-      _add_metrics "${current_metrics[@]}"
+    for metric in "${metrics_ref[@]}"; do
+      _add_kernel_metric "$target_kernel" "$metric"
     done
+  }
 
-    if [ "$json" = true ]; then
-      _add_metrics "${_metrics_json_export[@]}"
+  for kernel in "${candidate_kernels[@]}"; do
+    for analysis in ${kernel_analyses[$kernel]}; do
+      array_name="_metrics_${analysis}"
+      _add_analysis_metrics_to_kernel "$kernel" "$array_name"
+    done
+    # Add data-flow graph metrics to the existing per-kernel metric set.
+    # This is independent of final JSON generation.
+    if [ "$data_flow_graph" = true ]; then
+      for metric in "${_metrics_data_flow_graph[@]}"; do
+        _add_kernel_metric "$kernel" "$metric"
+      done
     fi
+  done
 
-    amd_metrics_required=false
-    if [ "${#_metrics_set[@]}" -gt 0 ]; then
+  amd_metrics_required=false
+  for kernel in "${candidate_kernels[@]}"; do
+    if [ -n "${kernel_metrics[$kernel]:-}" ]; then
       amd_metrics_required=true
     fi
-  fi
+  done
 
-########################################################################
-# Metric profiling
-########################################################################
+echo "======================================================================================================"
   mkdir -p metrics
   if [ "$amd_metrics_required" = true ]; then
-    echo "==== collecting kernel profiling data"
+    echo "==== Collecting kernel profiling data"
     start_metrics=$(date +%s.%N)
     profile_help=$(rocprof-compute profile --help 2>&1)
     # Determine whether the current rocprof-compute version supports filtering directly by metric IDs or only by hardware blocks.
@@ -457,154 +405,200 @@ if [ "$dry_run" = false ]; then
     esac
     printf 'Use legacy analyze output: %s\n' "$legacy_analyze_output"
 
-    #### Automatic mode #####
-    if [ "$automatic_mode" = true ]; then
-      rm -rf workloads
-      rm -rf metrics/workloads
-      declare -A kernel_profile_name=()
-      profile_index=0
-      # profile each candidate kernel given by the correspponding metrics
-      for kernel in "${candidate_kernels[@]}"; do
-        metrics_string="${kernel_metrics[$kernel]:-}"
-        # Analyses such as deadlock detection or restrict may not require any dynamic hardware metrics.
-        if [ -z "$metrics_string" ]; then
-          echo  "Skipping metric collection for kernel '$kernel': no metrics required."
-          continue
-        fi
-        read -r -a current_kernel_metrics <<< "$metrics_string"
-        if ! _build_profile_filter_arguments  "${current_kernel_metrics[@]}"; then
-          exit 1
-        fi
-
-        profile_name="${executable_filename}_candidate_${profile_index}"
-        kernel_profile_name["$kernel"]="$profile_name"
-
-        echo "==== profiling candidate kernel"
-        echo "Kernel:  $kernel"
-        echo "Metrics: ${current_kernel_metrics[*]}"
-        # creating profiling data
-        rocprof-compute profile --name "$profile_name" -k "$kernel" --no-roof --quiet "${profile_filter_arguments[@]}" -- "$executable" "$args"
-
-        profile_index=$((profile_index + 1))
-      done
-
-      # Analyze the already kernel-filtered workloads
-      if [ "$profile_index" -gt 0 ]; then
-        mv workloads metrics/workloads
-        cd metrics || exit
-        for kernel in "${candidate_kernels[@]}"; do
-          profile_name="${kernel_profile_name[$kernel]:-}"
-          # Skip metrics anaylze when analysis for kernel does not require any metrics
-          if [ -z "$profile_name" ]; then
-            continue
-          fi
-          metrics_string="${kernel_metrics[$kernel]}"
-          read -r -a current_kernel_metrics <<< "$metrics_string"
-
-          if [ ! -d "workloads/$profile_name" ]; then
-            echo "ERROR: Can not find metrics directory."
-            exit 1
-          fi
-          gpu_name=$(ls "workloads/$profile_name/")
-          workload_path="workloads/$profile_name/$gpu_name"
-
-          sanitized_kernel_name=$(printf '%s' "$kernel" | tr -c 'a-zA-Z0-9' '_' | tr -s '_' | sed 's/^_*//;s/_*$//')
-          output_file="${executable_filename}_${sanitized_kernel_name}_metrics"
-
-          analyze_arguments=(
-            analyze
-            -p "$workload_path"
-            -b
-            "${current_kernel_metrics[@]}"
-            -n per_kernel
-          )
-          if [ "$legacy_analyze_output" = true ]; then
-            rocprof-compute "${analyze_arguments[@]}" > "${output_file}.txt"
-          else
-            rocprof-compute "${analyze_arguments[@]}" --output-name "$output_file" --output-format txt > /dev/null
-          fi
-        done
-        cd .. || exit
+    rm -rf workloads
+    rm -rf metrics/workloads
+    declare -A kernel_profile_name=()
+    profile_index=0
+    # profile each candidate kernel given by the correspponding metrics
+    for kernel in "${candidate_kernels[@]}"; do
+      metrics_string="${kernel_metrics[$kernel]:-}"
+      # Analyses such as deadlock detection or restrict may not require any dynamic hardware metrics.
+      if [ -z "$metrics_string" ]; then
+        echo  "Skipping metric collection for kernel '$kernel': no metrics required."
+        continue
       fi
-    else
-      #### Manual Mode ####
-      if ! _build_profile_filter_arguments "${_metrics_set[@]}"; then
+      read -r -a current_kernel_metrics <<< "$metrics_string"
+      if ! _build_profile_filter_arguments  "${current_kernel_metrics[@]}"; then
         exit 1
       fi
+
+      profile_name="${executable_filename}_candidate_${profile_index}"
+      kernel_profile_name["$kernel"]="$profile_name"
+
+      # Use only the function name for rocprof-compute kernel filtering.
+      # The complete demangled signature may contain regex-special characters such as '(', ')' and '*', which can prevent the kernel from matching.
+      # spillingKernel(float*) -> spillingKernel
+      kernel_filter="${kernel%%(*}" 
+      echo "Profiling candidate kernel:"
+      echo "Kernel:  $kernel"
+      echo "Kernel filter: $kernel_filter"
+      echo "Kernel analyses: ${kernel_analyses[$kernel]}"
+      echo "Metrics: ${current_kernel_metrics[*]}"
       # creating profiling data
-      rm -rf "workloads/$executable_filename" # Clear possible previous workloads folder TODO: Can be uncommented when not debugging
-      rocprof-compute profile --name "$executable_filename" --no-roof --quiet "${profile_filter_arguments[@]}" -- "$executable" "$args"
-      gpu_name=$(ls "workloads/$executable_filename/")
-      # get the number of kernels and their respective kernel names in the executable
-      analysis_output=$(rocprof-compute analyze -p "workloads/$executable_filename/$gpu_name/" --list-stats)
-
-      # Depending on the ROCm compiler/profiler version, rocprof-compute --list-stats may report an AMDHSA kernel-descriptor symbol whose demangled name ends with"[clone .kd]". 
-      # Parse the complete Kernel_Name table cell instead of assuming that the kernel name ends with ")". see https://llvm.org/docs/AMDGPUUsage.html?#amdhsa-kernel-name
-      printf '%s\n' "$analysis_output" |
-        perl -ne '
-            if (/^\s*Detected Kernels\b/) {
-              $in_kernel_table = 1;
-              next;
-            }
-
-            if ($in_kernel_table && /^\s*╘/) {
-              $in_kernel_table = 0;
-              next;
-            }
-
-            if ($in_kernel_table && /^\s*│\s*(\d+)\s*│\s*([^│]+?)\s*│\s*$/) {
-              print "$1,$2\n";
-            } 
-            ' > metrics/kernel_list.csv
-
-      if [ ! -s metrics/kernel_list.csv ]; then
-        echo "ERROR: Failed to extract kernels from rocprof-compute --list-stats."
+      if ! rocprof-compute profile --name "$profile_name" -k "$kernel_filter" --no-roof --quiet "${profile_filter_arguments[@]}" -- "$executable" "$args"; then
+        echo "ERROR: Metric profiling failed for kernel: $kernel" >&2
         exit 1
       fi
+      profile_index=$((profile_index + 1))
+    done
 
-      rm -rf metrics/workloads
-      # Need to move everything into metrics folder because the analyze mode cant save the result in a directory
-      # and also cant access parent directories
+    # Analyze the already kernel-filtered workloads
+    if [ "$profile_index" -gt 0 ]; then
       mv workloads metrics/workloads
       cd metrics || exit
+      for kernel in "${candidate_kernels[@]}"; do
+        profile_name="${kernel_profile_name[$kernel]:-}"
+        # Skip metrics anaylze when analysis for kernel does not require any metrics
+        if [ -z "$profile_name" ]; then
+          continue
+        fi
+        metrics_string="${kernel_metrics[$kernel]}"
+        read -r -a current_kernel_metrics <<< "$metrics_string"
 
-      # Use different file descriptor (3) for the loop because rocprof-compute consumes/reads stdin resulting in only one kernel analyzed
-      exec 3< kernel_list.csv
-      # analyze each kernel separately
-      while IFS=, read -r -u 3 kernel_number raw_kernel_name; do
-        # Remove an optional AMDHSA descriptor suffix from the user-facing name.
-        display_kernel_name=$( printf '%s' "$raw_kernel_name" | sed 's/[[:space:]]*\[clone \.kd\][[:space:]]*$//')
-        # Replace spaces and special characters with underscores.
-        sanitized_kernel_name=$(printf '%s' "$display_kernel_name" | tr -c 'a-zA-Z0-9' '_' | tr -s '_' | sed 's/^_*//;s/_*$//')
+        if [ ! -d "workloads/$profile_name" ]; then
+          echo "ERROR: Can not find metrics directory."
+          exit 1
+        fi
+        gpu_name=$(ls "workloads/$profile_name/")
+        workload_path="workloads/$profile_name/$gpu_name"
+
+        sanitized_kernel_name=$(printf '%s' "$kernel" | tr -c 'a-zA-Z0-9' '_' | tr -s '_' | sed 's/^_*//;s/_*$//')
         output_file="${executable_filename}_${sanitized_kernel_name}_metrics"
 
         analyze_arguments=(
           analyze
-          -p "workloads/$executable_filename/$gpu_name"
+          -p "$workload_path"
           -b
-          "${_metrics_set[@]}"
+          "${current_kernel_metrics[@]}"
           -n per_kernel
-          -k "$kernel_number"
+          -k 0
         )
         if [ "$legacy_analyze_output" = true ]; then
-          # rocprofiler-compute 3.0.0 prints the report to stdout.
-          rocprof-compute "${analyze_arguments[@]}" > "${output_file}.txt"
+          if ! rocprof-compute "${analyze_arguments[@]}" > "${output_file}.txt"; then
+            echo "ERROR: Metric analysis failed for kernel: $kernel" >&2
+            exit 1
+          fi
         else
-          # Newer versions can create and name the text report themselves.
-          rocprof-compute "${analyze_arguments[@]}" --output-name "$output_file" --output-format txt > /dev/null
+          if ! rocprof-compute "${analyze_arguments[@]}" --output-name "$output_file" --output-format txt > /dev/null; then
+            echo "ERROR: Metric analysis failed for kernel: $kernel" >&2
+            exit 1
+          fi
         fi
       done
+      cd .. || exit
     fi
 
     end_metrics=$(date +%s.%N)
     metrics_time=$(awk "BEGIN {print $end_metrics - $start_metrics}")
-    exec 3<&- # release file descriptor 3
-    cd .. || exit # go back to previous work directory
   else 
     echo "Skipping AMD metrics collection: selected analyses do not require AMD metrics."
     metrics_time=0
   fi
+  ########################################################################
+  # Legacy metric profiling implementation - disabled
+  ########################################################################
+  # Previously, metrics were collected for all kernels in one profiling run.
+  # --list-stats was then used to enumerate kernels for per-kernel analysis.
+  #
+  # Implementation: Build a de-duplicated list of metric IDs required by the enabled analyses.
+  # _metrics_set=()
+  # _add_metrics()
+  # {
+  #   local metric
+  #   for metric in "$@"; do
+  #     if ! array_contains "$metric" "${_metrics_set[@]}"; then
+  #       _metrics_set+=("$metric")
+  #     fi
+  #   done
+  # }
 
+  # for analysis in "${enabled_analyses[@]}"; do
+  #   if ! array_contains "${analysis}" "${valid_analyses[@]}"; then
+  #     echo "ERROR: Unknown analysis name in enabled_analyses: $analysis"
+  #     exit 1
+  #   fi
+
+  #   array_name="_metrics_${analysis}"
+  #   declare -n current_metrics="${array_name}"
+
+  #   _add_metrics "${current_metrics[@]}"
+  # done
+
+  # if [ "$data_flow_graph" = true ]; then
+  #     _add_metrics "${_metrics_data_flow_graph[@]}"
+  # fi
+
+  # amd_metrics_required=false
+  # if [ "${#_metrics_set[@]}" -gt 0 ]; then
+  #   amd_metrics_required=true
+  # fi
+  # if ! _build_profile_filter_arguments "${_metrics_set[@]}"; then
+  #   exit 1
+  # fi
+  # # creating profiling data
+  # rm -rf "workloads/$executable_filename" # Clear possible previous workloads folder TODO: Can be uncommented when not debugging
+  # rocprof-compute profile --name "$executable_filename" --no-roof --quiet "${profile_filter_arguments[@]}" -- "$executable" "$args"
+  # gpu_name=$(ls "workloads/$executable_filename/")
+  # # get the number of kernels and their respective kernel names in the executable
+  # analysis_output=$(rocprof-compute analyze -p "workloads/$executable_filename/$gpu_name/" --list-stats)
+
+  # # Depending on the ROCm compiler/profiler version, rocprof-compute --list-stats may report an AMDHSA kernel-descriptor symbol whose demangled name ends with"[clone .kd]". 
+  # # Parse the complete Kernel_Name table cell instead of assuming that the kernel name ends with ")". see https://llvm.org/docs/AMDGPUUsage.html?#amdhsa-kernel-name
+  # printf '%s\n' "$analysis_output" |
+  #   perl -ne '
+  #       if (/^\s*Detected Kernels\b/) {
+  #         $in_kernel_table = 1;
+  #         next;
+  #       }
+
+  #       if ($in_kernel_table && /^\s*╘/) {
+  #         $in_kernel_table = 0;
+  #         next;
+  #       }
+
+  #       if ($in_kernel_table && /^\s*│\s*(\d+)\s*│\s*([^│]+?)\s*│\s*$/) {
+  #         print "$1,$2\n";
+  #       } 
+  #       ' > metrics/kernel_list.csv
+
+  # if [ ! -s metrics/kernel_list.csv ]; then
+  #   echo "ERROR: Failed to extract kernels from rocprof-compute --list-stats."
+  #   exit 1
+  # fi
+
+  # rm -rf metrics/workloads
+  # # Need to move everything into metrics folder because the analyze mode cant save the result in a directory
+  # # and also cant access parent directories
+  # mv workloads metrics/workloads
+  # cd metrics || exit
+
+  # # Use different file descriptor (3) for the loop because rocprof-compute consumes/reads stdin resulting in only one kernel analyzed
+  # exec 3< kernel_list.csv
+  # # analyze each kernel separately
+  # while IFS=, read -r -u 3 kernel_number raw_kernel_name; do
+  #   # Remove an optional AMDHSA descriptor suffix from the user-facing name.
+  #   display_kernel_name=$( printf '%s' "$raw_kernel_name" | sed 's/[[:space:]]*\[clone \.kd\][[:space:]]*$//')
+  #   # Replace spaces and special characters with underscores.
+  #   sanitized_kernel_name=$(printf '%s' "$display_kernel_name" | tr -c 'a-zA-Z0-9' '_' | tr -s '_' | sed 's/^_*//;s/_*$//')
+  #   output_file="${executable_filename}_${sanitized_kernel_name}_metrics"
+
+  #   analyze_arguments=(
+  #     analyze
+  #     -p "workloads/$executable_filename/$gpu_name"
+  #     -b
+  #     "${_metrics_set[@]}"
+  #     -n per_kernel
+  #     -k "$kernel_number"
+  #   )
+  #   if [ "$legacy_analyze_output" = true ]; then
+  #     # rocprofiler-compute 3.0.0 prints the report to stdout.
+  #     rocprof-compute "${analyze_arguments[@]}" > "${output_file}.txt"
+  #   else
+  #     # Newer versions can create and name the text report themselves.
+  #     rocprof-compute "${analyze_arguments[@]}" --output-name "$output_file" --output-format txt > /dev/null
+  #   fi
+  # done
+  # exec 3<&- # release file descriptor 3
 
 ########################################################################
 # PC Stall Sampling
