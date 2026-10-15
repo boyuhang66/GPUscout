@@ -621,10 +621,15 @@ if [ "$performance_mode" = false ]; then
     local -n current_args="$array_name"
 
     t0=$(date +%s.%N)
-    "$binary" "${current_args[@]}" # Execute the analysis binary with its arguments
+    if "$binary" "${current_args[@]}"; then # Execute the analysis binary with its arguments
+      analysis_rc=0
+    else
+      analysis_rc=$?
+    fi
     t1=$(date +%s.%N)
     dt=$(awk "BEGIN {print $t1 - $t0}")
     echo "Time for $analysis: ${dt}s"
+    return "$analysis_rc"
   }
   for analysis in "${enabled_analyses[@]}"; do
     if ! timed_run "$analysis"; then
@@ -703,6 +708,7 @@ else
     cat "${analysis_logs_dir}/${names[$i]}.log"
 
     if [ "${rc[$i]}" -ne 0 ]; then
+      analysis_failed=true
       echo \
         "ERROR: AMD analysis '${names[$i]}' failed with exit code ${rc[$i]}." \
         >&2
