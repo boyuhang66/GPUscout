@@ -11,10 +11,11 @@
 using json = nlohmann::json;
 
 json analysis_register_spilling (
-    json result,
+    json static_result,
     std::unordered_map<std::string, mtc> mtc_map,
     std::unordered_map<std::string, std::vector<live_registers>> live_register_map)
 {
+    auto& result = static_result["result"];
     for (auto& [krn_name, krn_result] : result.items())
     { 
         auto& occurrences = krn_result["occurrences"];
