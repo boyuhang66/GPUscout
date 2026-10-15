@@ -720,20 +720,37 @@ elif [ "$vendor" = "amd" ]; then
     # roc-obj-ls -v "${executable}" | \
     # awk '/amdgcn/{print $3}' | \
     # roc-obj-extract -o
-    bundle_uri=$(llvm-readobj --offloading "${executable}" | awk '/amdgcn/{print $2}')
-    llvm-objcopy --dump-offload-bundle="$bundle_uri"
-
-    tmp_file=$(find "$(dirname "$executable")" -type f -name "*.co")
-    object_file="$gpuscout_tmp_dir/${executable_filename}.co"
-    mv "$tmp_file" "$object_file"
-    echo "TMP: $gpuscout_tmp_dir"
 
     # Extracting mcpu name / LLVM target name
     # llvm_target_name=$(roc-obj-ls -v "${executable}" | \
     llvm_target_name=$(llvm-readobj --offloading "${executable}" | \
     awk '/amdgcn/ {match($0, /gfx[0-9a-f]+/); print substr($0, RSTART, RLENGTH)}')
-
-
+    
+    object_file="$gpuscout_tmp_dir/${executable_filename}.co"
+    # Implement a fallback mechanism to handle cases where llvm-objcopy does not support the --dump-offload-bundle option.
+    if llvm-objcopy -h 2>&1 | grep -q -- '--dump-offload-bundle'; then
+        echo "llvm-objcopy supports --dump-offload-bundle"
+        bundle_uri=$(llvm-readobj --offloading "${executable}" | awk '/amdgcn/{print $2}')
+        llvm-objcopy --dump-offload-bundle="$bundle_uri"
+        tmp_file=$(find "$(dirname "$executable")" -maxdepth 1 -type f -name "*.co")
+        if [ -z "$tmp_file" ]; then
+            echo "ERROR: Failed to find extracted AMD code object."
+            exit 1
+        fi
+        mv "$tmp_file" "$object_file"
+    else
+        echo "llvm-objcopy does not support --dump-offload-bundle, using --dump-section=.hip_fatbin and clang-offload-bundler"
+        fatbin_file="$gpuscout_tmp_dir/${executable_filename}.fatbin"
+        llvm-objcopy --dump-section=.hip_fatbin="$fatbin_file" "${executable}"
+        bundle_target=$(clang-offload-bundler --type=o --input="$fatbin_file" --list | awk '/amdgcn/ {print; exit}')
+        clang-offload-bundler --type=o --input="$fatbin_file" --output="$object_file" --targets="$bundle_target" --unbundle
+        if [ ! -s "$object_file" ]; then
+        echo "ERROR: Failed to extract AMD GPU code object."
+        exit 1
+        fi
+        rm -f "$fatbin_file"
+    fi
+    
     # creating assembly file
     echo "==== creating assembly file"
 
