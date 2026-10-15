@@ -26,64 +26,127 @@ if [ -z "${analysis_arg:-}" ]; then # if no analyses were specified, use automat
     vectorized_load
     wavefront_divergence
   )
-  
-  start_static_detect=$(date +%s.%N)
-  selected_static_detect_time=0
-
-  for analysis in "${static_detect_analyses[@]}"; do
-    detector="${gpuscout_dir}/analysis_amd/parser_amdgcn_${analysis}"
-    detector_start=$(date +%s.%N)
-
-    if "$detector" "$assembly"; then
-      detector_rc=0
-    else
-      detector_rc=$?
-    fi
-
-    detector_end=$(date +%s.%N)
-    detector_time=$(awk "BEGIN {print $detector_end - $detector_start}")
-    echo "Static detection time for $analysis: ${detector_time}s"
-
-    if [ "$detector_rc" -eq 0 ]; then
-      enabled_analyses+=("$analysis")
-      selected_static_detect_time=$(awk "BEGIN {print $selected_static_detect_time + $detector_time}")
-      echo "Detected bottleneck candidate: $analysis"
-    elif [ "$detector_rc" -eq 1 ]; then
-      echo "No bottleneck candidate detected: $analysis"
-    else
-      echo "ERROR: Static detection failed for $analysis." >&2
-      exit "$detector_rc"
-    fi
-  done
-  echo "Static detection time of selected analyses: ${selected_static_detect_time}s"
-else
+else 
   #### Manual mode ####
   # only do the selected bottlenecks parser.
   automatic_mode=false
   parse_csv_list "${analysis_arg}" "analysis"
-  enabled_analyses=("${parsed_csv_list[@]}")
+  requested_analyses=("${parsed_csv_list[@]}")
   echo "AMD analysis selection mode: manual"
+fi 
+echo "Requested AMD analyses: $(join_by_comma "${requested_analyses[@]}")"
 
-  for analysis in "${enabled_analyses[@]}"; do
-    parser="${gpuscout_dir}/analysis_amd/parser_amdgcn_${analysis}"
+start_static_parser=$(date +%s.%N)
+enabled_analyses=()
+# Store parser output separately so that terminal output remains ordered even when the parsers are executed in parallel.
+static_parser_logs_dir="${gpuscout_tmp_dir}/static_parser_tmp_outputs"
+mkdir -p "$static_parser_logs_dir"
+declare -a parser_rcs=()
+declare -a parser_pids=()
 
-    if ! "$parser" "$assembly"; then
+run_static_parser()
+{
+  local analysis="$1"
+  local private_log="$2"
+
+  local parser="${gpuscout_dir}/analysis_amd/parser_amdgcn_${analysis}"
+  local parser_start
+  local parser_end
+  local parser_time
+  local parser_rc
+
+  parser_start=$(date +%s.%N)
+  # Store the parser's own terminal output in a private log.
+  if "$parser" "$assembly" >"$private_log" 2>&1; then
+      parser_rc=0
+  else
       parser_rc=$?
-      # Generate the static JSON required by each manually selected analysis.
-      # Do not use the detection outcome to alter enabled_analyses.
-      if [ "$parser_rc" -ne 1 ]; then
-        echo "ERROR: Static parser failed for $analysis." >&2
-        exit "$parser_rc"
-      fi
+  fi
+
+  parser_end=$(date +%s.%N)
+  parser_time=$(awk "BEGIN {print $parser_end - $parser_start}")
+  # The function may run in a background process. Therefore, write the measured time to a file instead of trying to modify a parent-shell variable.
+  echo "==== Static parser time for $analysis: ${parser_time}s" >> "$private_log"
+  return "$parser_rc"
+}
+
+for analysis in "${requested_analyses[@]}"; do
+  parser="${gpuscout_dir}/analysis_amd/parser_amdgcn_${analysis}"
+  if [ ! -x "$parser" ]; then
+    echo "ERROR: Static parser not found or not executable: $parser" >&2
+    exit 1
+  fi
+done
+
+# Run static parsers in parallel
+if [ "$performance_mode" = true ]; then
+  echo "==== Running AMD static parsers in parallel"
+  for i in "${!requested_analyses[@]}"; do
+    analysis="${requested_analyses[$i]}"
+
+    private_log="${static_parser_logs_dir}/${analysis}.log"
+    : > "$private_log"
+    run_static_parser "$analysis" "$private_log" &
+    parser_pids[$i]=$!
+  done
+
+  # Wait for every parser and store its exit code.  
+  for i in "${!requested_analyses[@]}"; do
+    if wait "${parser_pids[$i]}"; then
+      parser_rcs[$i]=0
+    else
+      parser_rcs[$i]=$?
+    fi
+  done
+else
+  echo "==== Running AMD static parsers sequentially"
+  for i in "${!requested_analyses[@]}"; do
+    analysis="${requested_analyses[$i]}"
+
+    private_log="${static_parser_logs_dir}/${analysis}.log"
+    : > "$private_log"
+
+    if run_static_parser "$analysis" "$private_log"; then
+      parser_rcs[$i]=0
+    else
+      parser_rcs[$i]=$?
     fi
   done
 fi
-end_static_detect=$(date +%s.%N)
-static_detect_time=$(awk "BEGIN {print $end_static_detect - $start_static_detect}")
 
-echo "Selected AMD analyses: $(join_by_comma "${enabled_analyses[@]}")"
+parser_failed=false
+for i in "${!requested_analyses[@]}"; do
+  analysis="${requested_analyses[$i]}"
+  parser_rc="${parser_rcs[$i]}"
+  private_log="${static_parser_logs_dir}/${analysis}.log"
+  # Print the parser output together with its execution time.
+  if [ -s "$private_log" ]; then
+    cat "$private_log"
+  fi
 
-#### Build candidate kernel->analyses mapping for automatic mode ####
+  if [ "$parser_rc" -eq 0 ]; then
+    # A static bottleneck candidate was detected.
+    # Only these analyses continue to dynamic profiling and merge analysis.
+    enabled_analyses+=("$analysis")
+    echo "     Result: candidate detected"
+  elif [ "$parser_rc" -eq 1 ]; then
+    # No static candidate means that no dynamic profiling is required for this analysis, even when it was manually selected.
+    echo "     Result: no candidate detected - skipping analysis"
+  else
+    parser_failed=true
+    echo "ERROR: Static parser '$analysis' failed with exit code $parser_rc." >&2
+  fi
+done
+if [ "$parser_failed" = true ]; then
+  echo "ERROR: One or more AMD static parsers failed." >&2
+  exit 1
+fi
+
+end_static_parser=$(date +%s.%N)
+static_parser_time=$(awk "BEGIN {print $end_static_parser - $start_static_parser}")
+echo "Enabled AMD analyses: $(join_by_comma "${enabled_analyses[@]}")"
+ 
+#### Build candidate kernel->analyses mapping ####
 candidate_kernels=()
 declare -A kernel_analyses=()
 if [ "$automatic_mode" = true ]; then
