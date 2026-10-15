@@ -240,6 +240,8 @@ json build_static_register_spilling_result(const std::unordered_map<std::string,
             }
              krn_result["occurrences"].push_back(line_result);
         }
+        
+        static_result["result"][krn_name] = krn_result;
 
         if (krn_result["occurrences"].empty())
         {
@@ -251,7 +253,6 @@ json build_static_register_spilling_result(const std::unordered_map<std::string,
             {"name", krn_name},
             {"demangled", get_demangled_kernel(krn_name, "c++filt")}
         });
-        static_result["result"][krn_name] = krn_result;
     }
 
     return static_result;

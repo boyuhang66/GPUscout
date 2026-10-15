@@ -369,6 +369,8 @@ json build_static_shared_memory_result(const std::unordered_map<std::string, std
 
         json krn_result = {{"occurrences", json::array()}};
 
+        bool shared_recommend_flag = false;
+
         for (auto reg_obj : reg_vec)
         {
             // consider only registers with load count > 0, operation count > 1 and operation count > load count
@@ -445,8 +447,7 @@ json build_static_shared_memory_result(const std::unordered_map<std::string, std
                     for (const auto& brc_obj : brc_it->second)
                     {
                         if (brc_obj.tgt == gbl_ld_obj.brc &&
-                            std::stoi(brc_obj.PC_offset) >
-                                std::stoi(gbl_ld_obj.PC_offset) &&
+                            std::stoi(brc_obj.PC_offset) > std::stoi(gbl_ld_obj.PC_offset) &&
                             brc_obj.loop)
                         {
                             inside_loop = true;
@@ -470,15 +471,18 @@ json build_static_shared_memory_result(const std::unordered_map<std::string, std
                 };
 
                 krn_result["occurrences"].push_back(line_result);
+
+                shared_recommend_flag = true;
             }
         }
 
-        if (krn_result["occurrences"].empty())
+        static_result["result"][krn_name] = krn_result;
+
+        if (!shared_recommend_flag)
         {
             continue;
         }   
 
-        static_result["result"][krn_name] = krn_result;
         static_result["candidate_kernels"].push_back(
         {
             {"name", krn_name},

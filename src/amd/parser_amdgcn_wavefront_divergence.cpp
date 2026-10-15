@@ -153,12 +153,13 @@ json build_static_wavefront_divergence_result(const std::unordered_map<std::stri
             }
         }
 
+        static_result["result"][krn_name] = krn_result;
+
         if (krn_result["occurrences"].empty())
         {
             continue;
         }   
 
-        static_result["result"][krn_name] = krn_result;
         static_result["candidate_kernels"].push_back(
         {
             {"name", krn_name},

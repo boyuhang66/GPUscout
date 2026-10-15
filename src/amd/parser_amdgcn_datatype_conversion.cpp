@@ -170,6 +170,13 @@ json build_static_datatype_conversion_result(const std::unordered_map<std::strin
             });
         }
 
+        static_result["result"][krn_name] = krn_result;
+        static_result["metadata"][krn_name] = {
+            {"F2F_count", conv_obj.F2F_cnt},
+            {"I2F_count", conv_obj.I2F_cnt},
+            {"F2I_count", conv_obj.F2I_cnt}
+        };
+
         if (krn_result["occurrences"].empty())
         {
             continue;
@@ -180,17 +187,6 @@ json build_static_datatype_conversion_result(const std::unordered_map<std::strin
             {"name", krn_name},
             {"demangled", get_demangled_kernel(krn_name, "c++filt")}
         });
-
-        /*
-         * Keep the existing final JSON structure in "result".
-         */
-        static_result["result"][krn_name] = krn_result;
-
-        static_result["metadata"][krn_name] = {
-            {"F2F_count", conv_obj.F2F_cnt},
-            {"I2F_count", conv_obj.I2F_cnt},
-            {"F2I_count", conv_obj.F2I_cnt}
-        };
     }
 
     return static_result;

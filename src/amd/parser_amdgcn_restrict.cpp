@@ -185,18 +185,21 @@ json build_static_restrict_result(const std::unordered_map<std::string, std::vec
                 continue;
             }
             krn_result["occurrences"].push_back({
-                {"severity", "INFO"}, {"pc_offset", reg_obj.PC_offset},
-                {"file_name", reg_obj.loc.file_name}, {"line_number", reg_obj.loc.line_num},
+                {"severity", "INFO"}, 
+                {"pc_offset", reg_obj.PC_offset},
+                {"file_name", reg_obj.loc.file_name},
+                {"line_number", reg_obj.loc.line_num},
                 {"register", reg_obj.reg_num}
             });
         }
+
+        static_result["result"][krn_name] = krn_result;
 
         if (krn_result["occurrences"].empty())
         {
             continue;
         }   
 
-        static_result["result"][krn_name] = krn_result;
         static_result["candidate_kernels"].push_back(
         {
             {"name", krn_name},

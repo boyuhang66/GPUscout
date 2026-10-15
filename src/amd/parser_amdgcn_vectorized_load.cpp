@@ -313,15 +313,15 @@ json build_static_vectorized_load_result(const std::unordered_map<std::string, i
             }
         }
 
-        if (krn_result["occurrences"].empty())
-        {
-            continue;
-        }   
-        
         static_result["result"][krn_name_1] = krn_result;
         static_result["metadata"][krn_name_1] = {
             {"non_vectorized_load_count", ld_cnt}
         };
+
+        if (krn_result["occurrences"].empty())
+        {
+            continue;
+        }   
 
         bool is_candidate = false;
         for (const auto& occurrence : krn_result["occurrences"])
@@ -336,7 +336,10 @@ json build_static_vectorized_load_result(const std::unordered_map<std::string, i
         if (is_candidate)
         {
             static_result["candidate_kernels"].push_back(
-                get_demangled_kernel(krn_name_1, "c++filt"));
+            {
+                {"name", krn_name_1},
+                {"demangled", get_demangled_kernel(krn_name_1, "c++filt")}
+            });
         }
     }
 

@@ -292,6 +292,12 @@ json build_static_atomic_instruction_result(const std::unordered_map<std::string
             });
         }
 
+        static_result["result"][krn_name] = krn_result;
+        static_result["metadata"][krn_name] = {
+            {"global_atomics", atom_obj.num_g},
+            {"occurrence_metadata", occurrence_metadata}
+        };
+
         if (krn_result["occurrences"].empty())
         {
             continue;
@@ -302,11 +308,6 @@ json build_static_atomic_instruction_result(const std::unordered_map<std::string
             {"name", krn_name},
             {"demangled", get_demangled_kernel(krn_name, "c++filt")}
         });
-        static_result["result"][krn_name] = krn_result;
-        static_result["metadata"][krn_name] = {
-            {"global_atomics", atom_obj.num_g},
-            {"occurrence_metadata", occurrence_metadata}
-        };
     }
 
     return static_result;
