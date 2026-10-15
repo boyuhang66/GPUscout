@@ -31,7 +31,9 @@ usage() {
       echo "  --sm_count : (Nvidia) Can be used to specify the number of streaming multiprocessors of the current GPU, as this will be used in calculations (default: 16)"
       # TODO Add if wanted for AMD
     fi
-    echo "  -j | --json : Save a JSON-formatted version of the output (Needed for the use of GPUscout-GUI)"
+    # echo "  -j | --json : Save a JSON-formatted version of the output (Needed for the use of GPUscout-GUI)"
+    echo "  --no-json : Disable final JSON output.(Needed for the use of GPUscout-GUI, enabled by default)"
+    echo "  --no-data-flow-graph : Disable additional data-flow graph metrics (enabled by default)."  
     echo "  -p | --performance : Use a separate thread for each analysis"
     if [ "@VENDOR@" = "nvidia" ] || [ "@VENDOR@" = "all" ]; then
       echo "  --kernels : (Nvidia) Comma-separated kernel patterns for NCU collection and end-to-end kernel filtering in final analysis output."
@@ -93,7 +95,7 @@ done
 if [ "@VENDOR@" = "nvidia" ]; then
   options=$(getopt -o hvt:e:c:a:jp -l help,dry_run,verbose,type:,executable:,cubin:,args:,sm_count:,json,performance,kernels:,analysis: -- "${normalized_args[@]}")
 elif [ "@VENDOR@" = "amd" ]; then
-  options=$(getopt -o hvt:e:r:a:jp -l help,dry_run,verbose,type:,executable:,rga:,args:,sm_count:,json,performance,analysis: -- "${normalized_args[@]}")
+  options=$(getopt -o hvt:e:r:a:jp -l help,dry_run,verbose,type:,executable:,rga:,args:,sm_count:,no-json,no-data-flow-graph,performance,analysis: -- "${normalized_args[@]}")
 else
   options=$(getopt -o hvt:e:c:r:a:jp -l help,dry_run,verbose,type:,executable:,cubin:,rga:,args:,sm_count:,json,performance,kernels:,analysis: -- "${normalized_args[@]}")
 fi
@@ -109,7 +111,8 @@ performance_mode=false
 vendor="@VENDOR@"
 dry_run=false
 verbose=false
-json=false
+json=true
+data_flow_graph=true
 executable=""
 cubin=""
 rga=""
@@ -153,8 +156,12 @@ while true; do
             verbose=true
             shift
             ;;
-        -j | --json)
-            json=true
+        --no-json)
+            json=false
+            shift
+            ;;
+        --no-data-flow-graph)
+            data_flow_graph=false
             shift
             ;;
         -p | --performance)
@@ -585,6 +592,7 @@ echo "==== Arguments for the executable file: \"$args\""
 echo "==== Dry-run: $dry_run"
 echo "==== Verbose: $verbose"
 echo "==== JSON Output: $json"
+echo "==== Data Flow Graph metrics: $data_flow_graph"
 echo "==== Performance Mode (Multi-threading): $performance_mode"
 if [ "$vendor" = "nvidia" ]; then
     echo "==== Kernels Filter: ${kernels_arg:-<not set: auto-select kernels from generated SASS (cubin-scoped)>}"
