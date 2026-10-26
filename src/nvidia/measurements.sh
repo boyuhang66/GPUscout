@@ -64,18 +64,20 @@ append_ncu_csv_rows () {
 ########################################################################
 # Static Analysis Selection
 ########################################################################
+echo "Static parsing and analysis selection"
+echo "======================================================================================================"
+if [ ! -s "$exe_sass" ]; then
+    echo "ERROR: NVIDIA SASS file was not created or is empty: $exe_sass" >&2
+    exit 2
+fi
+
 automatic_mode=false
-start_static_detect=$(date +%s.%N)
-selected_static_detect_time=0
-
-if [ -z "${analysis_arg:-}" ]; then
+if [ -z "${analysis_arg:-}" ]; then # if no analyses were specified, use automatic mode
     #### Automatic mode ####
-    # Enable analyses only when their static bottleneck has been detected.
+    # Enable analyses only when their static bottleneck occurrence has been detected.
     automatic_mode=true
-    enabled_analyses=()
-    echo "NVIDIA analysis selection mode: automatic (static-triggered)"
-
-    static_detect_analyses=(
+    echo "== NVIDIA analysis selection mode: automatic (static-triggered)"
+    requested_analyses=(
         register_spilling
         use_restrict
         vectorization
@@ -86,67 +88,127 @@ if [ -z "${analysis_arg:-}" ]; then
         datatype_conversion
         deadlock_detection
     )
-
-    for analysis in "${static_detect_analyses[@]}"; do
-        detector="${gpuscout_dir}/analysis_nvidia/parser_sass_${analysis}"
-        detector_start=$(date +%s.%N)
-
-        if "$detector" "${exe_sass}" "${exe_ptx}"; then
-            detector_rc=0
-        else
-            detector_rc=$?
-        fi
-
-        detector_end=$(date +%s.%N)
-        detector_time=$(awk "BEGIN {print $detector_end - $detector_start}")
-        selected_static_detect_time=$(awk "BEGIN {print $selected_static_detect_time + $detector_time}")
-        echo "Static detection time for $analysis: ${detector_time}s"
-
-        if [ "$detector_rc" -eq 0 ]; then
-            enabled_analyses+=("$analysis")
-            echo "Detected bottleneck candidate: $analysis"
-        elif [ "$detector_rc" -eq 1 ]; then
-            echo "No bottleneck candidate detected: $analysis"
-        else
-            echo "ERROR: Static detection failed for $analysis"
-            exit "$detector_rc"
-        fi
-    done
-    echo "Static detection time of all selected analyses: ${selected_static_detect_time}s"
 else
     #### Manual mode ####
-    # Keep the existing CLI-based analysis selection.
+    # Only run the parsers for the selected analyses.
     automatic_mode=false
     parse_csv_list "${analysis_arg}" "analysis"
-    enabled_analyses=("${parsed_csv_list[@]}")
-    echo "NVIDIA analysis selection mode: manual"
+    requested_analyses=("${parsed_csv_list[@]}")
+    echo "== NVIDIA analysis selection mode: manual"
+fi
+echo "== Requested NVIDIA analyses: $(join_by_comma "${requested_analyses[@]}")"
 
-    # Always generate static JSON for manually selected analyses. Return code 1
-    # means no candidate was found; it must not disable a user-selected analysis.
-    for analysis in "${enabled_analyses[@]}"; do
-        parser="${gpuscout_dir}/analysis_nvidia/parser_sass_${analysis}"
-        parser_start=$(date +%s.%N)
+start_static_parser=$(date +%s.%N)
+enabled_analyses=()
+# Store parser output separately so that terminal output remains ordered even when the parsers are executed in parallel.
+static_parser_logs_dir="${gpuscout_tmp_dir}/static_parser_tmp_outputs"
+mkdir -p "$static_parser_logs_dir"
+declare -a parser_rcs=()
+declare -a parser_pids=()
 
-        if "$parser" "${exe_sass}" "${exe_ptx}"; then
-            parser_rc=0
+run_static_parser()
+{
+    local analysis="$1"
+    local private_log="$2"
+    local parser="${gpuscout_dir}/analysis_nvidia/parser_sass_${analysis}"
+    local parser_start
+    local parser_end
+    local parser_time
+    local parser_rc
+
+    parser_start=$(date +%s.%N)
+    # Store the parser's own terminal output in a private log.
+    if "$parser" "$exe_sass" "$exe_ptx" >"$private_log" 2>&1; then
+        parser_rc=0
+    else
+        parser_rc=$?
+    fi
+
+    parser_end=$(date +%s.%N)
+    parser_time=$(awk "BEGIN {print $parser_end - $parser_start}")
+    # The function may run in a background process. Therefore, append the measured time to its private log.
+    echo "== Static parser time for $analysis: ${parser_time}s" >> "$private_log"
+    return "$parser_rc"
+}
+
+for analysis in "${requested_analyses[@]}"; do
+    parser="${gpuscout_dir}/analysis_nvidia/parser_sass_${analysis}"
+    if [ ! -x "$parser" ]; then
+        echo "ERROR: Static parser not found or not executable: $parser" >&2
+        exit 1
+    fi
+done
+
+if [ "$performance_mode" = true ]; then
+    # Run static parsers in parallel
+    echo "== Running NVIDIA static parsers in parallel"
+    for i in "${!requested_analyses[@]}"; do
+        analysis="${requested_analyses[$i]}"
+
+        private_log="${static_parser_logs_dir}/${analysis}.log"
+        : > "$private_log"
+        run_static_parser "$analysis" "$private_log" &
+        parser_pids[$i]=$!
+    done
+
+    # Wait for every parser and store its exit code.
+    for i in "${!requested_analyses[@]}"; do
+        if wait "${parser_pids[$i]}"; then
+        parser_rcs[$i]=0
         else
-            parser_rc=$?
-        fi
-
-        parser_end=$(date +%s.%N)
-        parser_time=$(awk "BEGIN {print $parser_end - $parser_start}")
-        selected_static_detect_time=$(awk "BEGIN {print $selected_static_detect_time + $parser_time}")
-        echo "Static detection time for $analysis: ${parser_time}s"
-
-        if [ "$parser_rc" -gt 1 ]; then
-            echo "ERROR: Static parser failed for $analysis."
-            exit "$parser_rc"
+        parser_rcs[$i]=$?
         fi
     done
-    echo "Static detection time of selected analyses: ${selected_static_detect_time}s"
+else
+    # Run static parsers sequentially
+    echo "== Running NVIDIA static parsers sequentially"
+    for i in "${!requested_analyses[@]}"; do
+        analysis="${requested_analyses[$i]}"
+
+        private_log="${static_parser_logs_dir}/${analysis}.log"
+        : > "$private_log"
+
+        if run_static_parser "$analysis" "$private_log"; then
+        parser_rcs[$i]=0
+        else
+        parser_rcs[$i]=$?
+        fi
+    done
 fi
-end_static_detect=$(date +%s.%N)
-static_detect_time=$(awk "BEGIN {print $end_static_detect - $start_static_detect}")
+
+parser_failed=false
+for i in "${!requested_analyses[@]}"; do
+    analysis="${requested_analyses[$i]}"
+    parser_rc="${parser_rcs[$i]}"
+    private_log="${static_parser_logs_dir}/${analysis}.log"
+    # Print the parser output together with its execution time.
+    if [ -s "$private_log" ]; then
+        cat "$private_log"
+    fi
+
+    if [ "$parser_rc" -eq 0 ]; then
+        # A static bottleneck candidate was detected.
+        # Only these analyses continue to dynamic profiling and merge analysis.
+        enabled_analyses+=("$analysis")
+        echo "   Result: candidate detected"
+    elif [ "$parser_rc" -eq 1 ]; then
+        # No static candidate means that no dynamic profiling is required for this analysis, even when it was manually selected.
+        echo "   Result: no candidate detected - skipping analysis"
+    else
+        parser_failed=true
+        echo "ERROR: Static parser '$analysis' failed with exit code $parser_rc." >&2
+    fi
+done
+if [ "$parser_failed" = true ]; then
+    echo "ERROR: One or more NVIDIA static parsers failed." >&2
+    exit 1
+fi
+
+end_static_parser=$(date +%s.%N)
+static_parser_time=$(awk "BEGIN {print $end_static_parser - $start_static_parser}")
+echo ""
+echo "==== Static parsing summary"
+echo "== Enabled analyses: $(join_by_comma "${enabled_analyses[@]}")"
 
 ########################################################################
 # Build Candidate Kernel -> Analysis Mapping
