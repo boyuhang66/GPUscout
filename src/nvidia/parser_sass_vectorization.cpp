@@ -271,6 +271,7 @@ json build_static_vectorization_result(const std::unordered_map<std::string, loa
                         {"line_number", index_sass.line_number},
                         {"pc_offset", index_sass.pcOffset},
                         {"register", index_sass.base},
+                        {"register_load_type", static_cast<int>(index_sass.reg_load_type)},
                         {"unroll_pc_offsets", index_sass.unroll_pc_offsets},
                         {"adjacent_memory_accesses", adjacent_count}
                     });
@@ -283,8 +284,7 @@ json build_static_vectorization_result(const std::unordered_map<std::string, loa
                         {"line_number", index_sass.line_number},
                         {"pc_offset", index_sass.pcOffset},
                         {"register", index_sass.base},
-                        {"register_load_type",
-                         static_cast<int>(index_sass.reg_load_type)}
+                        {"register_load_type", static_cast<int>(index_sass.reg_load_type)}
                     });
                 }
             }
