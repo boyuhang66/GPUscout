@@ -79,7 +79,7 @@ std::tuple<std::unordered_map<std::string, std::vector<branch_counter>>, std::un
     std::vector<branch_counter> branch_vec;
     std::unordered_map<std::string, std::vector<branch_counter>> counter_map;
     std::string kernel_name;
-    int code_line_number;
+    int code_line_number = 0; // initialize to zero to avoid allocating undefined number to the variable
 
     std::unordered_map<std::string, int> branch_target_line_number_map;
 

@@ -56,7 +56,7 @@ std::unordered_map<std::string, datatype_conversions_counter> datatype_conversio
     datatype_conversions_counter counter_obj;
     std::unordered_map<std::string, datatype_conversions_counter> counter_map;
     std::string k_sass;
-    int code_line_number;
+    int code_line_number = 0; // initialize to zero to avoid allocating undefined number to the variable
 
     if (file.is_open())
     {

@@ -40,7 +40,7 @@ std::unordered_map<std::string, deadlock_detect> deadlock_detection_analysis(con
     std::unordered_map<std::string, deadlock_detect> counter_map;
 
     std::string k_sass;
-    int code_line_number;
+    int code_line_number = 0; // initialize to zero to avoid allocating undefined number to the variable
 
     if (file.is_open())
     {

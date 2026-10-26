@@ -147,7 +147,7 @@ std::tuple<std::unordered_map<std::string, std::vector<local_memory_counter>>, s
     local_memory_counter counter_obj;
     std::unordered_map<std::string, std::vector<local_memory_counter>> counter_map;
     std::string kernel_name;
-    int code_line_number;
+    int code_line_number = 0; // initialize to zero to avoid allocating undefined number to the variable
     std::vector<local_memory_counter> lmem_vec;
 
     track_register_instruction last_reg_obj;

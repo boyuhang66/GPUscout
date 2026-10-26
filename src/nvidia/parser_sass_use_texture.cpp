@@ -168,7 +168,7 @@ std::unordered_map<std::string, std::vector<register_used>> use_texture_analysis
     std::vector<register_used> register_vec;
     std::unordered_map<std::string, std::vector<register_used>> counter_map;
     std::string k_sass;
-    int code_line_number;
+    int code_line_number = 0; // initialize to zero to avoid allocating undefined number to the variable
     register_used register_obj;
 
     if (file.is_open())

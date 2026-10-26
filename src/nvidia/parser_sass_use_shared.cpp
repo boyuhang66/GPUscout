@@ -158,7 +158,7 @@ std::tuple<std::unordered_map<std::string, std::vector<register_access>>, std::u
     std::vector<register_access> register_vec;
     std::unordered_map<std::string, std::vector<register_access>> counter_map;
     std::string kernel_name;
-    int code_line_number;
+    int code_line_number = 0; // initialize to zero to avoid allocating undefined number to the variable
     register_access register_obj;
 
     branch_counter branch_obj;

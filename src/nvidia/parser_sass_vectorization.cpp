@@ -119,7 +119,7 @@ std::tuple<std::unordered_map<std::string, load_counter>, std::unordered_map<std
 
     std::string k_sass;
 
-    int code_line_number;
+    int code_line_number = 0; // initialize to zero to avoid allocating undefined number to the variable
     // register_data register_obj;
 
     if (file.is_open())
