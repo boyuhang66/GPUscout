@@ -238,10 +238,7 @@ for analysis in "${enabled_analyses[@]}"; do
         else
             kernel_analyses["${mangled}"]+=" ${analysis}"
         fi
-    done < <(
-        jq -r '.candidate_kernels[]? | [.name, .demangled] | @tsv' \
-            "${static_result_file}"
-    )
+    done < <(jq -r '.candidate_kernels[]? | [.name, .demangled] | @tsv' "${static_result_file}")
 done
 
 
@@ -314,6 +311,41 @@ else
     selected_candidate_kernels=("${candidate_kernels[@]}")
 fi
 
+# Filter enabled analyses by selected candidate kernels if --kernels or --nsys-hotspot was specified. This ensures that only analyses relevant to the selected kernels are executed.
+selected_analyses=()
+for analysis in "${enabled_analyses[@]}"; do
+    analysis_required=false
+
+    for kernel in "${selected_candidate_kernels[@]}"; do
+        for kernel_analysis in ${kernel_analyses[$kernel]:-}; do
+            if [ "${kernel_analysis}" = "${analysis}" ]; then
+                analysis_required=true
+                break 2
+            fi
+        done
+    done
+
+    if [ "${analysis_required}" = true ]; then
+        selected_analyses+=("${analysis}")
+    fi
+done
+enabled_analyses=("${selected_analyses[@]}")
+
+# Build Per-Analysis Kernel Filters for Merge Analysis
+declare -A analysis_kernel_filters=()
+for analysis in "${enabled_analyses[@]}"; do
+    analysis_kernels=()
+    for kernel in "${selected_candidate_kernels[@]}"; do
+        for kernel_analysis in ${kernel_analyses[$kernel]:-}; do
+            if [ "${kernel_analysis}" = "${analysis}" ]; then
+                analysis_kernels+=("${kernel}")
+                break
+            fi
+        done
+    done
+    analysis_kernel_filters["${analysis}"]="$(join_by_comma "${analysis_kernels[@]}")"
+done
+
 ncu_kernel_base_args=(--kernel-name-base mangled)
 ncu_collection_kernels=("${selected_candidate_kernels[@]}")
 
@@ -331,14 +363,10 @@ for kernel in "${selected_candidate_kernels[@]}"; do
     echo "== Analyses: ${kernel_analyses[$kernel]}"
 done
 
-# Merge analysis binaries consumes mangled symbols. Use a non-matching sentinel when no requested kernel maps to a static candidate; an empty
-# filter could otherwise be interpreted as "all kernels" downstream.
-if [ "${automatic_mode}" = false ] && [ -z "${kernels_arg:-}" ] && [ "${#nsys_hotspot_kernels[@]}" -eq 0 ]; then
-    # Empty filter means: merge all kernels from the static result.
-    kernel_filter_csv=""
-elif [ "${#selected_candidate_kernels[@]}" -gt 0 ]; then
-    # Automatic mode, or an explicit kernel selection:
-    # merge only the selected candidate kernels.
+# Merge analysis binaries consume mangled symbols.
+# Use a non-matching sentinel when no candidate kernel is selected;
+# an empty filter could otherwise be interpreted as "all kernels" downstream.
+if [ "${#selected_candidate_kernels[@]}" -gt 0 ]; then
     kernel_filter_csv="$(join_by_comma "${selected_candidate_kernels[@]}")"
 else
     # No selected candidate kernel. Prevent an empty filter from being interpreted as "all kernels" in automatic mode.
@@ -673,15 +701,15 @@ fi
 ########################################################################
 cd ${gpuscout_dir}/analysis_nvidia
 
-args_register_spilling=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_exe" "$json" "$gpuscout_output_dir" "$sms" "${kernel_filter_csv}")
-args_use_restrict=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_hpc" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-args_vectorization=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_hpc" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-args_global_atomics=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-args_warp_divergence=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-args_use_texture=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-args_use_shared=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-args_datatype_conversion=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
-args_deadlock_detection=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${kernel_filter_csv}")
+args_register_spilling=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_exe" "$json" "$gpuscout_output_dir" "$sms" "${analysis_kernel_filters[register_spilling]}")
+args_use_restrict=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_hpc" "$json" "$gpuscout_output_dir" "${analysis_kernel_filters[use_restrict]}")
+args_vectorization=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$reg_hpc" "$json" "$gpuscout_output_dir" "${analysis_kernel_filters[vectorization]}")
+args_global_atomics=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${analysis_kernel_filters[global_atomics]}")
+args_warp_divergence=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${analysis_kernel_filters[warp_divergence]}")
+args_use_texture=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${analysis_kernel_filters[use_texture]}")
+args_use_shared=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${analysis_kernel_filters[use_shared]}")
+args_datatype_conversion=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${analysis_kernel_filters[datatype_conversion]}")
+args_deadlock_detection=("$hpc_sass" "$exe_sass" "$exe_ptx" "$sampling" "$metrics" "$json" "$gpuscout_output_dir" "${analysis_kernel_filters[deadlock_detection]}")
 
 start_analysis=$(date +%s.%N)
 
