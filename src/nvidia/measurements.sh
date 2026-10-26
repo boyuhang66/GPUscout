@@ -667,18 +667,21 @@ if [ "$dry_run" = false ]; then
 
             # skip warmup iterations to get more accurate metrics for the steady-state execution of the kernel
             # launch_count=1 to run only one instance of the kernel and get per-kernel metrics 
-            ncu -f --csv --log-file "${tmp_csv}" --print-units base --print-kernel-base mangled \
+            if ncu -f --csv --log-file "${tmp_csv}" --print-units base --print-kernel-base mangled \
                 "${ncu_kernel_base_args[@]}" \
                 --kernel-name "${kernel}" \
                 --launch-count 1 \
                 --metrics "${kernel_metrics_csv}" \
-                ${executable} ${args}
-            # ncu -f --csv --log-file "${tmp_csv}" --print-units base --print-kernel-base mangled \
-            #     "${ncu_kernel_base_args[@]}" \
-            #     --kernel-name "${kernel}" -s 5 --launch-count 1 \
-            #     --metrics "${metrics_csv}" \
-            #     ${executable} ${args}
-            append_ncu_csv_rows "${tmp_csv}" "${metrics_out}"
+                ${executable} ${args}; then 
+                append_ncu_csv_rows "${tmp_csv}" "${metrics_out}"
+            # otherwise, if NCU fails, print the error message and exit with the same code.
+            else
+                ncu_rc=$?
+                cat "${tmp_csv}" >&2
+                rm -f "${tmp_csv}"
+                echo "ERROR: NCU profiling failed for kernel '$kernel' with exit code $ncu_rc." >&2
+                exit "$ncu_rc"
+            fi
         done
 
         if [ ! -f "${metrics_out}" ]; then
@@ -799,11 +802,18 @@ if [ "$performance_mode" = false ]; then
         fi
         echo "Combining above results for ${readable_label} analysis . . . . . . . . . . . . . . . "
         local t0 t1 dt
+        local command_rc
         t0=$(date +%s.%N)
-        "$@"
+        # Collect the exit code of the command to return it after timing.
+        if "$@"; then
+            command_rc=0
+        else
+            command_rc=$?
+        fi
         t1=$(date +%s.%N)
         dt=$(awk "BEGIN {print $t1 - $t0}")
         echo "Time for ${readable_label}: ${dt}s"
+        return "$command_rc"
     }
     # Run only the analyses selected in `enabled_analyses` above.
     for analysis in "${enabled_analyses[@]}"; do
@@ -815,7 +825,13 @@ if [ "$performance_mode" = false ]; then
         array_name="args_${analysis}"
         declare -n current_args="$array_name"
 
-        timed_run "${analysis}" "${binary}" "${current_args[@]}"
+        if timed_run "${analysis}" "${binary}" "${current_args[@]}"; then
+            :
+        else
+            analysis_rc=$?
+            echo "ERROR: Merge analysis '$analysis' failed with exit code $analysis_rc." >&2
+            exit "$analysis_rc"
+        fi
     done
 else
     # Use Multi-Threading for faster analysis -> each analysis within its own thread
@@ -884,11 +900,23 @@ else
     done
 
     # print outputs of all analyses in order and check for any failures
-    for name in "${names[@]}"; do
+    analysis_failed=false
+    for i in "${!names[@]}"; do
+        name="${names[$i]}"
         cat "${analysis_logs_dir}/${name}.log"
+
+        if [ "${rc[$i]}" -ne 0 ]; then
+            analysis_failed=true
+            echo "ERROR: Merge analysis '$name' failed with exit code ${rc[$i]}." >&2
+        fi
     done
 
-    echo "All NVIDIA static analyses completed!"
+    if [ "$analysis_failed" = true ]; then
+        echo "ERROR: One or more NVIDIA merge analyses failed." >&2
+        exit 1
+    fi
+
+    echo "All NVIDIA merge analyses completed!"
 fi
 
 # Merge all individual JSON files
