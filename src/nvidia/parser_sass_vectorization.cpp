@@ -339,5 +339,7 @@ int main(int argc, char** argv)
                   << static_result_file << std::endl;
         return 2;
     }
+
+    return has_vectorization_candidate(static_result) ? 0 : 1;
 }
 
