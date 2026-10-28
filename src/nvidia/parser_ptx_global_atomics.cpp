@@ -351,8 +351,7 @@ json build_static_global_atomics_result(const std::unordered_map<std::string, at
             {"shared_line_numbers", std::move(shared_line_numbers)}
         };
 
-        // Only kernels with global atomics considered as candidate
-        if (v_sass.atom_global_count == 0)
+        if (static_result["result"][k_sass]["occurrences"].empty())
             continue;
 
         static_result["candidate_kernels"].push_back({
